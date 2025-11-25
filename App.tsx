@@ -172,6 +172,30 @@ const StatusBar = ({ role, onLogout, onSettings }: any) => (
   </div>
 );
 
+const QuickActions = ({ onAction }: { onAction: (query: string) => void }) => {
+  const actions = [
+    { label: 'Weather', query: 'What is the current weather?', icon: '☁️' },
+    { label: 'News', query: 'Latest news headlines', icon: '📰' },
+    { label: 'Music', query: 'Play trending music', icon: '🎵' },
+    { label: 'Status', query: 'System status report', icon: '🔋' },
+  ];
+
+  return (
+    <div className="w-full px-4 pb-4 z-30 overflow-x-auto no-scrollbar flex gap-3 justify-center">
+       {actions.map((action) => (
+         <button
+           key={action.label}
+           onClick={() => onAction(action.query)}
+           className="flex items-center gap-2 px-4 py-2 bg-nexa-cyan/5 border border-nexa-cyan/20 rounded-full backdrop-blur-sm hover:bg-nexa-cyan/10 hover:border-nexa-cyan/50 transition-all active:scale-95 group whitespace-nowrap"
+         >
+           <span className="text-sm grayscale group-hover:grayscale-0 transition-all">{action.icon}</span>
+           <span className="text-nexa-cyan/70 font-mono text-[10px] tracking-widest uppercase group-hover:text-nexa-cyan">{action.label}</span>
+         </button>
+       ))}
+    </div>
+  );
+};
+
 const ControlDeck = ({ onMicClick, hudState }: any) => {
     return (
         <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/90 to-transparent z-40 relative flex items-center justify-center pb-6">
@@ -504,7 +528,7 @@ const App: React.FC = () => {
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     loadMemory(profile.mobile);
     
-    // Dynamic Greeting Logic
+    // Greeting
     setTimeout(() => {
        const hour = new Date().getHours();
        let timeGreeting = "Morning";
@@ -512,18 +536,8 @@ const App: React.FC = () => {
        if (hour >= 17) timeGreeting = "Evening";
 
        const addressName = profile.role === UserRole.ADMIN ? "Chandan sir" : profile.name;
-
-       const introTemplates = [
-         `मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\nGood ${timeGreeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${addressName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`,
-         `System online. Good ${timeGreeting}, ${addressName}.\nमैं Nexa, आपकी AI assistant, ready हूँ.\nChandan Lohave द्वारा design किया गया, मेरा system fully operational है. Command दीजिए.`,
-         `Welcome back, ${addressName}. The network is stable.\nGood ${timeGreeting}.\nमैं Nexa, Chandan Lohave की creation, आपकी service में حاضر हूँ. आज हम क्या achieve करें?`,
-         `Good ${timeGreeting}, ${addressName}. All systems are green.\nMy core programming by Chandan Lohave is active. How can I assist you today?`
-       ];
-       
-       const displayText = introTemplates[Math.floor(Math.random() * introTemplates.length)];
-       
-       // Pronunciation fix for all templates
-       const spokenText = displayText.replace(/Lohave/g, "लोहवे");
+       const displayText = `मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\nGood ${timeGreeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${addressName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`;
+       const spokenText = displayText.replace("Lohave", "लोहवे");
 
        speakSystemMessage(displayText, spokenText);
     }, 500);
@@ -590,6 +604,9 @@ const App: React.FC = () => {
 
           </div>
           
+          {/* QUICK ACTIONS */}
+          <QuickActions onAction={processQuery} />
+
           {/* CONTROL DECK (Fixed Bottom) */}
           <ControlDeck onMicClick={handleMicClick} hudState={hudState} />
 

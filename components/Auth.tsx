@@ -283,7 +283,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                  >
                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      {loading ? 'AUTHENTICATING...' : <>AUTHORIZE OVERRIDE <span className="text-xs opacity-70">{'>>'}</span></>}
+                      {loading ? 'AUTHENTICATING...' : <>AUTHORIZE OVERRIDE <span className="text-xs opacity-70">>></span></>}
                    </span>
                  </button>
                  
