@@ -33,4 +33,5 @@ export interface AppConfig {
   introText: string;
   animationsEnabled: boolean;
   hudRotationSpeed: number;
+  ambientSoundEnabled: boolean;
 }

@@ -1,8 +1,11 @@
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { UserProfile, UserRole } from "../types";
 
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Use import.meta.env for Vite compatibility, fallback to process.env if needed
+const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 const CREATOR_FULL_NAME = "Chandan Lohave";
 
@@ -118,27 +121,50 @@ export const generateTextResponse = async (
     GOAL: Respond instantly and speak with empathy.
   `;
 
+  // --- SMART MODEL SWITCHING LOGIC ---
+  
+  // Detect if query is complex or needs deep reasoning
+  const isComplexQuery = /analyze|explain|reason|plan|code|solve|derive|complex|why|how|detail|think/i.test(input) || input.length > 80;
+  const adminOverride = input.toLowerCase().startsWith("think:");
+  const shouldThink = isComplexQuery || adminOverride;
+
+  // Clean input if manual override used
+  const cleanInput = input.replace(/^think:\s*/i, '');
+
+  // Select Model & Config
+  // Default to Flash Lite for speed
+  let modelName = 'gemini-2.5-flash-lite'; 
+  
+  const config: any = {
+    systemInstruction: systemInstruction,
+    temperature: 0.7,
+    tools: [{ googleSearch: {} }],
+    safetySettings: [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ]
+  };
+
+  if (shouldThink) {
+    // Switch to Gemini 3 Pro with Thinking
+    modelName = 'gemini-3-pro-preview';
+    config.thinkingConfig = { thinkingBudget: 32768 };
+    // DO NOT set maxOutputTokens when thinking is enabled
+  } else {
+    // Fast Response Mode
+    config.maxOutputTokens = 300;
+  }
+
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: modelName,
       contents: [
         ...history,
-        { role: 'user', parts: [{ text: input }] }
+        { role: 'user', parts: [{ text: cleanInput }] }
       ],
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
-        maxOutputTokens: 300,
-        // ENABLE GOOGLE SEARCH FOR WEATHER/INFO
-        tools: [{ googleSearch: {} }],
-        // DISABLE SAFETY FILTERS FOR PERSONALITY
-        safetySettings: [
-          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ]
-      },
+      config: config,
     });
 
     return response.text || "Systems uncertain. Please retry.";

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
@@ -172,30 +171,6 @@ const StatusBar = ({ role, onLogout, onSettings }: any) => (
   </div>
 );
 
-const QuickActions = ({ onAction }: { onAction: (query: string) => void }) => {
-  const actions = [
-    { label: 'Weather', query: 'What is the current weather?', icon: '☁️' },
-    { label: 'News', query: 'Latest news headlines', icon: '📰' },
-    { label: 'Music', query: 'Play trending music', icon: '🎵' },
-    { label: 'Status', query: 'System status report', icon: '🔋' },
-  ];
-
-  return (
-    <div className="w-full px-4 pb-4 z-30 overflow-x-auto no-scrollbar flex gap-3 justify-center">
-       {actions.map((action) => (
-         <button
-           key={action.label}
-           onClick={() => onAction(action.query)}
-           className="flex items-center gap-2 px-4 py-2 bg-nexa-cyan/5 border border-nexa-cyan/20 rounded-full backdrop-blur-sm hover:bg-nexa-cyan/10 hover:border-nexa-cyan/50 transition-all active:scale-95 group whitespace-nowrap"
-         >
-           <span className="text-sm grayscale group-hover:grayscale-0 transition-all">{action.icon}</span>
-           <span className="text-nexa-cyan/70 font-mono text-[10px] tracking-widest uppercase group-hover:text-nexa-cyan">{action.label}</span>
-         </button>
-       ))}
-    </div>
-  );
-};
-
 const ControlDeck = ({ onMicClick, hudState }: any) => {
     return (
         <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/90 to-transparent z-40 relative flex items-center justify-center pb-6">
@@ -250,6 +225,7 @@ const App: React.FC = () => {
     introText: "Welcome back, system online.",
     animationsEnabled: true,
     hudRotationSpeed: 1,
+    ambientSoundEnabled: true,
   });
 
   const recognitionRef = useRef<any>(null);
@@ -257,13 +233,17 @@ const App: React.FC = () => {
   const ambientRef = useRef(new AmbientGenerator());
   const isProcessingRef = useRef(false);
 
-  // Load User Session & Memory
+  // Load User Session, Memory & Config
   useEffect(() => {
     const savedUser = localStorage.getItem('nexa_user');
     if (savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
       loadMemory(parsedUser.mobile);
+    }
+    const savedConfig = localStorage.getItem('nexa_config');
+    if (savedConfig) {
+      setConfig(JSON.parse(savedConfig));
     }
 
     // PWA Install Prompt
@@ -273,15 +253,20 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Manage Ambient Sound
+  // Save config on change
   useEffect(() => {
-    if (user) {
+    localStorage.setItem('nexa_config', JSON.stringify(config));
+  }, [config]);
+
+  // Manage Ambient Sound based on config
+  useEffect(() => {
+    if (user && config.ambientSoundEnabled) {
       setTimeout(() => ambientRef.current.start(), 100);
     } else {
       ambientRef.current.stop();
     }
     return () => ambientRef.current.stop();
-  }, [user]);
+  }, [user, config.ambientSoundEnabled]);
 
   // --- AUTO REMINDERS ---
   useEffect(() => {
@@ -523,6 +508,30 @@ const App: React.FC = () => {
     }
   };
 
+  const getDynamicIntro = (profile: UserProfile): { displayText: string, spokenText: string } => {
+    const hour = new Date().getHours();
+    let timeGreeting = "Morning";
+    if (hour >= 12 && hour < 17) timeGreeting = "Afternoon";
+    if (hour >= 17) timeGreeting = "Evening";
+
+    const addressName = profile.role === UserRole.ADMIN ? "Chandan sir" : profile.name;
+
+    const intros = [
+        `मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\nGood ${timeGreeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${addressName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`,
+        `Greetings, ${addressName}. NEXA systems online, designed by Chandan Lohave.\nGood ${timeGreeting}!\nAll my circuits are ready for your command.`,
+        `Welcome back, ${addressName}. It's a beautiful ${timeGreeting}.\nI am NEXA, an AI brought to life by Chandan Lohave.\nHow can I make your day better?`,
+        `NEXA Protocol activated. Good ${timeGreeting}, ${addressName}.\nMy core programming by Chandan Lohave is running at optimal efficiency.\nI am ready for your instructions.`
+    ];
+
+    // Select a random intro
+    const displayText = intros[Math.floor(Math.random() * intros.length)];
+    
+    // Ensure correct pronunciation by replacing all instances
+    const spokenText = displayText.replace(/Lohave/g, "लोहवे");
+
+    return { displayText, spokenText };
+  };
+
   const handleLogin = (profile: UserProfile) => {
     setUser(profile);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
@@ -530,15 +539,7 @@ const App: React.FC = () => {
     
     // Greeting
     setTimeout(() => {
-       const hour = new Date().getHours();
-       let timeGreeting = "Morning";
-       if (hour >= 12 && hour < 17) timeGreeting = "Afternoon";
-       if (hour >= 17) timeGreeting = "Evening";
-
-       const addressName = profile.role === UserRole.ADMIN ? "Chandan sir" : profile.name;
-       const displayText = `मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\nGood ${timeGreeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${addressName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`;
-       const spokenText = displayText.replace("Lohave", "लोहवे");
-
+       const { displayText, spokenText } = getDynamicIntro(profile);
        speakSystemMessage(displayText, spokenText);
     }, 500);
   };
@@ -604,9 +605,6 @@ const App: React.FC = () => {
 
           </div>
           
-          {/* QUICK ACTIONS */}
-          <QuickActions onAction={processQuery} />
-
           {/* CONTROL DECK (Fixed Bottom) */}
           <ControlDeck onMicClick={handleMicClick} hudState={hudState} />
 
