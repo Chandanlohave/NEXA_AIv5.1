@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 
@@ -158,9 +160,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const completeLogin = (profile: UserProfile) => {
     setLoading(true);
-    setTimeout(() => {
-      onLogin(profile);
-    }, 1000);
+    // CRITICAL FIX: Removed setTimeout. 
+    // This ensures the click event is passed synchronously to App.tsx
+    // allowing the AudioContext to resume immediately, solving the "No Sound" issue on mobile.
+    onLogin(profile);
   };
 
   return (

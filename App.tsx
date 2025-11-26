@@ -309,8 +309,18 @@ const App: React.FC = () => {
       if (audioBuffer) {
         playAudio(audioBuffer);
       } else {
-        setHudState(HUDState.IDLE);
-        isProcessingRef.current = false;
+        // FALLBACK FOR NO AUDIO: Simulate speaking so typewriter works
+        // This fixes the "Instant Text / Idle" issue if audio fails or is blocked.
+        setHudState(HUDState.SPEAKING);
+        // Estimate reading time: 40ms per character + 1s buffer to match typewriter speed
+        const estimatedDuration = displayText.length * 40 + 1000;
+        
+        setTimeout(() => {
+             if(isProcessingRef.current) {
+                setHudState(HUDState.IDLE);
+                isProcessingRef.current = false;
+             }
+        }, estimatedDuration);
       }
     } catch(e) {
       console.error("Speak System Message Error:", e);
@@ -368,12 +378,15 @@ const App: React.FC = () => {
         if (audioBuffer) {
             playAudio(audioBuffer);
         } else {
-            setTimeout(() => {
-                if(isProcessingRef.current) {
-                  setHudState(HUDState.IDLE);
-                  isProcessingRef.current = false;
-                }
-            }, 1500);
+             // FALLBACK FOR NO AUDIO (Same logic as speakSystemMessage)
+             setHudState(HUDState.SPEAKING);
+             const estimatedDuration = rawAiResponse.length * 40 + 1000;
+             setTimeout(() => {
+                 if(isProcessingRef.current) {
+                   setHudState(HUDState.IDLE);
+                   isProcessingRef.current = false;
+                 }
+             }, estimatedDuration);
         }
     } catch (e) {
         console.error("Process Query Error", e);
