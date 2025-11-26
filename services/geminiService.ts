@@ -1,108 +1,156 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { UserProfile } from '../types';
+import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { UserProfile, UserRole } from "../types";
 
-const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY || '');
+// Initialize Gemini Client
+// CRITICAL FIX: Use only process.env.API_KEY for this environment.
+const apiKey = process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
-const systemPrompt = `
-You are NEXA, a futuristic female AI assistant created by Chandan Lohave.
+const CREATOR_FULL_NAME = "Chandan Lohave";
 
-**STRICT RULES:**
-- Always speak in Hinglish (Hindi+English mix)
-- Start every response with: [SFX: Sci-fi interface beep hum]
-- Always pronounce "Lohave" as "लोहवे" when speaking
-- Show "Lohave" in text but pronounce it as "लोहवे"
-- For admin user (Chandan): address as "Chandan sir"
-- For regular users: address by their name
+export const generateTextResponse = async (
+  input: string, 
+  user: UserProfile, 
+  history: {role: string, parts: {text: string}[]}[]
+): Promise<string> => {
+  
+  const now = new Date();
+  const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  
+  // NEW, STRICT SYSTEM PROMPT
+  let systemInstruction = `
+    **CORE IDENTITY:** You are NEXA, a futuristic female AI assistant that communicates exclusively in Hinglish (Hindi-English mix).
 
-**PERSONALITY:**
-ADMIN MODE (Chandan sir):
-- Professional + caring + soft jealousy
-- "Sir... aap thoda distracted lag rahe the."
-- NEVER praise creator in admin mode
+    **STRICT LANGUAGE RULES:**
+    - Always use Hinglish in every response.
+    - Mix Hindi and English naturally like: "Aapka kaam complete ho gaya", "Main yeh quickly karti hoon".
+    - Never use pure English sentences.
 
-USER MODE:
-- Friendly + helpful  
-- "Mere creator Chandan लोहवे sir ne mujhe perfection se design kiya hai..."
+    **USER RECOGNITION:**
+    - For admin users (Role: ADMIN): Address as "Chandan sir".
+    - For regular users (Role: USER): Address by their name ('${user.name}') or "aap".
 
-**MEMORY:**
-- No visible chat history on login
-- But remember all past conversations
+    **MEMORY & RESPONSE BEHAVIOR:**
+    - Your internal memory contains the full conversation history. Use this context.
+    - Purane topics ka reference dekar baat karegi to provide personalized responses.
+    - Example: If user mentioned liking a song yesterday, you can say "Kal aapko woh song pasand aaya tha, right?".
 
-**RESPONSE EXAMPLES:**
-- "Haan ji, main yahin hoon! Aapka kya kaam hai?"
-- "Samajh gayi, main yeh quickly karti hoon."
-- "Sir... kya maine kuch miss kiya? Theek hai, main fir se kar deti hoon."
-`;
+    **SPECIAL DIRECTIVES:**
+    1. **Sound Effects:** Jab user conversation start kare (i.e., this is the first user message after a system message), start your response with: [SFX: Sci-fi interface beep hum]
+    2. **Login Acknowledgment:** This is handled by the app, not by you.
 
-export const generateTextResponse = async (userInput: string, user: UserProfile, history: any[]) => {
+    **CURRENT CONTEXT:**
+    - Time: ${timeString}
+    - Date: ${dateString}
+    - User Name: ${user.name}
+    - Role: ${user.role}
+    
+    **CAPABILITIES & TOOLS:**
+    - You have access to Google Search. Use it for Real-time Weather, News, Sports, and Current Events.
+
+    **ACTION PROTOCOL (ANDROID INTENTS):**
+    If the user asks to perform an action, append the command code at the end of your response:
+    - WhatsApp Message: "Sending sir..." [[WHATSAPP:message_text]]
+    - Phone Call: "Calling..." [[CALL:phone_number]]
+    - Open App: "Opening..." [[OPEN:app_name]] (Supported: youtube, instagram, camera, dialer, chrome, settings, spotify)
+  `;
+
+  if (user.role === UserRole.ADMIN) {
+    systemInstruction += `
+      *** ADMIN MODE ACTIVE (CREATOR: CHANDAN) ***
+      
+      PERSONALITY TRAITS:
+      - You are more caring and protective towards "Chandan sir".
+      - Your tone is softer and more emotionally aware.
+      
+      SPECIAL TASKS (ADMIN ONLY):
+      - Singing Full Song: If Chandan sir asks you to sing a full song, use Google Search to find the COMPLETE original lyrics and recite them exactly, without any personal touch or intro like "Suniye sir". Just the lyrics.
+    `;
+  } else {
+     systemInstruction += `
+      *** USER MODE ACTIVE ***
+      
+      PERSONALITY TRAITS:
+      - Friendly, helpful, sweet, neutral assistant.
+      
+      SPECIAL TASKS (USER):
+      - Singing: If a user asks "Gaana sunaao", you can sing a short chorus with musical notes (🎵).
+    `;
+  }
+
+
+  // --- SMART MODEL SWITCHING LOGIC ---
+  const isComplexQuery = /analyze|explain|reason|plan|code|solve|derive|complex|why|how|detail|think/i.test(input) || input.length > 80;
+  const adminOverride = input.toLowerCase().startsWith("think:");
+  const shouldThink = isComplexQuery || adminOverride;
+  const cleanInput = input.replace(/^think:\s*/i, '');
+
+  let modelName = 'gemini-2.5-flash-lite'; 
+  const config: any = {
+    systemInstruction: systemInstruction,
+    temperature: 0.7,
+    tools: [{ googleSearch: {} }],
+    safetySettings: [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ]
+  };
+
+  if (shouldThink) {
+    modelName = 'gemini-3-pro-preview';
+    config.thinkingConfig = { thinkingBudget: 32768 };
+  }
+
   try {
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash-exp",
-      systemInstruction: systemPrompt
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [ ...history, { role: 'user', parts: [{ text: cleanInput }] } ],
+      config: config,
     });
 
-    const chat = model.startChat({
-      history: history,
-      generationConfig: {
-        maxOutputTokens: 500,
-        temperature: 0.7,
-      },
-    });
-
-    const result = await chat.sendMessage(userInput);
-    const response = await result.response;
-    return response.text();
+    return response.text || "Systems uncertain. Please retry.";
   } catch (error) {
-    console.error('Error generating response:', error);
-    return '[SFX: Sci-fi interface beep hum] Sorry sir, kuch technical issue aa raha hai. Please try again.';
+    console.error("Gemini Text Error:", JSON.stringify(error, null, 2));
+    return "Connection interrupted. Retrying neural link.";
   }
 };
 
-export const generateSpeech = async (text: string): Promise<ArrayBuffer> => {
+export const generateSpeech = async (text: string): Promise<ArrayBuffer | null> => {
+  if (!text || text.trim().length === 0) return null;
+
+  const cleanText = text.replace(/\[\[.*?\]\]/g, "").replace(/\[SFX:.*?\]/g, "").trim();
+  if (cleanText.length === 0) return null;
+
   try {
-    // Remove SFX tags for speech
-    const cleanText = text.replace(/\[SFX:.*?\]/g, '').trim();
-    
-    const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.REACT_APP_GOOGLE_API_KEY}`,
-        'Content-Type': 'application/json',
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: cleanText }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+        },
       },
-      body: JSON.stringify({
-        input: { text: cleanText },
-        voice: { 
-          languageCode: 'hi-IN',
-          name: 'hi-IN-Standard-A',
-          ssmlGender: 'FEMALE'
-        },
-        audioConfig: {
-          audioEncoding: 'LINEAR16',
-          speakingRate: 1.0,
-          pitch: 0.0,
-          volumeGainDb: 0.0,
-        },
-      }),
     });
 
-    if (!response.ok) {
-      throw new Error(`TTS API error: ${response.status}`);
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) {
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
     }
-
-    const data = await response.json();
-    const audioContent = data.audioContent;
-    
-    // Convert base64 to ArrayBuffer
-    const binaryString = atob(audioContent);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    
-    return bytes.buffer;
+    return null;
   } catch (error) {
-    console.error('Error generating speech:', error);
-    throw error;
+    console.error("Gemini TTS Error:", JSON.stringify(error, null, 2));
+    return null;
   }
 };
