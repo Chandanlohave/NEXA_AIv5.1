@@ -491,46 +491,22 @@ const App: React.FC = () => {
     unlockAudioContext();
 
     setUser(profile);
+    setHudState(HUDState.THINKING);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     loadMemory(profile.mobile);
     
+    // Removed unstable network check for a faster, more optimistic startup.
     setTimeout(() => {
-      const performNetworkCheckAndGreet = async () => {
-        const networkCheckTimeout = 5000; // 5 seconds
-
-        try {
-          const audioPromise = generateSpeech("test");
-          const timeoutPromise = new Promise<null>((resolve) => 
-            setTimeout(() => resolve(null), networkCheckTimeout)
-          );
-          
-          const result = await Promise.race([audioPromise, timeoutPromise]);
-
-          if (result) {
-            // Network is stable
-            const hour = new Date().getHours();
-            let greeting = 'Good morning';
-            if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
-            else if (hour >= 18) greeting = 'Good evening';
-            
-            const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
-            
-            const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave نے design kiya hai.\n${greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye ${userName}, main aapki kis prakaar sahayata kar sakti hoon?`;
-            
-            speakSystemMessage(introMessage);
-          } else {
-            // Network is unstable
-            const unstableMessage = "Network connection unstable. Main online hoon, but responses slow ho sakte hain.";
-            speakSystemMessage(unstableMessage);
-          }
-        } catch (error) {
-          console.error("Network check failed:", error);
-          const errorMessage = "Network connection error. Please try again.";
-          speakSystemMessage(errorMessage);
-        }
-      };
-
-      performNetworkCheckAndGreet();
+      const hour = new Date().getHours();
+      let greeting = 'Good morning';
+      if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
+      else if (hour >= 18) greeting = 'Good evening';
+      
+      const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
+      
+      const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave نے design kiya hai.\n${greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye ${userName}, main aapki kis prakaar sahayata kar sakti hoon?`;
+      
+      speakSystemMessage(introMessage);
     }, 500);
   };
 

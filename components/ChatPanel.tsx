@@ -35,10 +35,8 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onTyping }) => {
 
     return () => clearInterval(intervalId);
   }, [text, onTyping]);
-
-  // Clean the text for display (remove SFX tags)
-  const cleanText = displayedText.replace(/\[SFX:.*?\]/g, "").trim();
-  return <span>{cleanText}</span>;
+  
+  return <span>{displayedText}</span>;
 };
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = UserRole.USER, hudState, isAudioLoading }) => {
@@ -81,7 +79,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = 
           const shouldAnimate = isLastModelMessage && isSpeaking;
           const showAudioLoader = isLastModelMessage && isAudioLoading;
           
-          const cleanFullText = msg.text.replace(/\[SFX:.*?\]/g, "").trim();
+          // Clean text for display: remove SFX, trim, and replace Hindi script with Latin script as a fallback.
+          const cleanTextForDisplay = msg.text.replace(/\[SFX:.*?\]/g, "").trim().replace(/लोहवे/g, 'Lohave');
 
           return (
             <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
@@ -92,9 +91,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = 
                   ) : (
                     <>
                       {shouldAnimate ? (
-                        <TypewriterText text={msg.text} onTyping={scrollToBottom} />
+                        <TypewriterText text={cleanTextForDisplay} onTyping={scrollToBottom} />
                       ) : (
-                        <span className="whitespace-pre-wrap">{cleanFullText}</span>
+                        <span className="whitespace-pre-wrap">{cleanTextForDisplay}</span>
                       )}
                       {showAudioLoader && (
                         <div className="inline-flex items-center gap-1 ml-2">
@@ -107,7 +106,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = 
                   )}
                 </div>
                 <div className={`text-[8px] uppercase tracking-widest mt-1 opacity-50 ${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'}`}>
-                   [{label}] {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hourCycle: 'h23'})}
+                   {label} &middot; {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}
                 </div>
               </div>
             </div>
