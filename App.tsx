@@ -150,6 +150,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]); // UI state: Only shows current turn
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [config, setConfig] = useState<AppConfig>({ introText: "", animationsEnabled: true, hudRotationSpeed: 1, ambientSoundEnabled: true });
@@ -213,7 +214,18 @@ const App: React.FC = () => {
   const initSpeechRecognition = () => {
       if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const SpeechGrammarList = (window as any).SpeechGrammarList || (window as any).webkitSpeechGrammarList;
+      
       const recognition = new SpeechRecognition();
+      
+      if (SpeechGrammarList) {
+          const speechRecognitionList = new SpeechGrammarList();
+          // JSGF format for grammar. Increase weight of these specific words.
+          const grammar = '#JSGF V1.0; grammar nexa_names; public <name> = Nexa | Chandan ;';
+          speechRecognitionList.addFromString(grammar, 1);
+          recognition.grammars = speechRecognitionList;
+      }
+
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = 'en-IN'; // Indian English for better recognition
@@ -230,8 +242,6 @@ const App: React.FC = () => {
         console.error("Speech Error", event.error);
         if (event.error === 'aborted' || event.error === 'no-speech') { return; }
         setHudState(HUDState.IDLE);
-        // Optional: Speak an error for better feedback
-        // speakNative("System link unstable."); 
       };
       recognition.onresult = (event: any) => { 
           const transcript = event.results[0][0].transcript;
@@ -266,7 +276,6 @@ const App: React.FC = () => {
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
       ctx.resume().then(() => {
-        // Play a tiny silent buffer to force the browser to accept audio from this context
         try {
           const buffer = ctx.createBuffer(1, 1, 22050);
           const source = ctx.createBufferSource();
@@ -280,65 +289,17 @@ const App: React.FC = () => {
     }
   };
 
-  // --- FALLBACK NATIVE TTS (HYBRID VOICE ENGINE) ---
-  const speakNative = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    
-    // Stop any current speaking
-    window.speechSynthesis.cancel();
-
-    // Clean text
-    const cleanText = text.replace(/\[\[.*?\]\]/g, "").replace(/\[SFX:.*?\]/g, "").trim();
-    if (!cleanText) return;
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Attempt to select a better voice
-    const voices = window.speechSynthesis.getVoices();
-    // Try to find a Google voice or a female voice, preferably English/Hindi
-    const preferredVoice = voices.find(v => (v.name.includes('Google') || v.name.includes('Samantha')) && (v.lang.includes('en') || v.lang.includes('hi')));
-    if (preferredVoice) utterance.voice = preferredVoice;
-    
-    utterance.rate = 1.0; 
-    utterance.pitch = 1.0;
-    
-    utterance.onstart = () => {
-        setHudState(HUDState.SPEAKING);
-    };
-    utterance.onend = () => {
-        if(isProcessingRef.current) {
-            setHudState(HUDState.IDLE);
-            isProcessingRef.current = false;
-        }
-    };
-    utterance.onerror = () => {
-        if(isProcessingRef.current) {
-            setHudState(HUDState.IDLE);
-            isProcessingRef.current = false;
-        }
-    };
-    
-    // Ensure state is set even if start event lags
-    setHudState(HUDState.SPEAKING);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  // --- Global Pronunciation Fix ---
   const applyPronunciationFix = (text: string): string => {
-    // Replaces all occurrences of "Lohave" (case-insensitive) with its phonetic spelling for TTS
     return text.replace(/Lohave/gi, 'लोहवे');
   };
 
   const handleMicClick = () => {
     unlockAudioContext(); 
     
-    // Interrupt logic for THINKING or SPEAKING states
     if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING) {
         isProcessingRef.current = false;
         if (recognitionRef.current) recognitionRef.current.abort();
-        window.speechSynthesis.cancel(); // Also stop native speech
         
-        // Force stop any playing audio from WebAudio
         if (audioContextRef.current) {
            audioContextRef.current.suspend().then(() => audioContextRef.current?.resume());
         }
@@ -347,14 +308,12 @@ const App: React.FC = () => {
         return;
     }
 
-    // Start/Stop logic for IDLE or LISTENING states
     if (hudState === HUDState.LISTENING) {
         setHudState(HUDState.IDLE); 
         if (recognitionRef.current) {
             recognitionRef.current.stop();
         }
     } else {
-        // ROBUST START: Re-init if null
         if (!recognitionRef.current) {
             recognitionRef.current = initSpeechRecognition();
         }
@@ -362,7 +321,6 @@ const App: React.FC = () => {
             recognitionRef.current?.start();
         } catch (e) {
             console.warn("Recognition start error, resetting...", e);
-            // If already started or crashed, hard reset
             recognitionRef.current?.stop();
             setTimeout(() => {
                 try { recognitionRef.current?.start(); } catch(err) { console.error("Retry failed", err); }
@@ -386,64 +344,7 @@ const App: React.FC = () => {
      }
   };
 
-  const speakSystemMessage = async (displayText: string) => {
-    if (isProcessingRef.current) return;
-    setHudState(HUDState.THINKING);
-    isProcessingRef.current = true;
-
-    try {
-      // 1. Generate audio first
-      const spokenText = applyPronunciationFix(displayText);
-      
-      // OPTIMIZATION: ADD TIMEOUT TO TTS GENERATION
-      // If network is slow (taking > 8 seconds), fallback to native voice immediately.
-      const audioPromise = generateSpeech(spokenText);
-      const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
-        setTimeout(() => resolve(null), 8000)
-      );
-      
-      const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
-      
-      // Check for processing interruption
-      if (!isProcessingRef.current) return;
-
-      const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
-      
-      executeIntents(displayText);
-
-      if (audioBuffer) {
-        // 3. TRY GEMINI VOICE
-        try {
-            playAudio(audioBuffer, () => {
-                 // On success playback start, show text
-                 setTimeout(() => {
-                    memoryRef.current.push(modelMessage);
-                    saveMemory();
-                    setMessages([modelMessage]);
-                 }, 50);
-            });
-        } catch (audioError) {
-             console.error("Audio Playback Blocked, falling back to Native", audioError);
-             memoryRef.current.push(modelMessage);
-             saveMemory();
-             setMessages([modelMessage]);
-             speakNative(displayText); // FALLBACK
-        }
-      } else {
-        // FALLBACK TO NATIVE VOICE IF GEMINI API FAILS OR TIMEOUT
-        memoryRef.current.push(modelMessage);
-        saveMemory();
-        setMessages([modelMessage]);
-        speakNative(displayText);
-      }
-    } catch(e) {
-      console.error("Speak System Message Error:", e);
-      // Even on system error, try to speak native if we have text
-      speakNative(displayText);
-    }
-  };
-
-  const playAudio = (buffer: ArrayBuffer, onStart?: () => void) => {
+  const playAudio = (buffer: ArrayBuffer, messagesToDisplay: ChatMessage[]) => {
       if (!isProcessingRef.current) return;
       
       const ctx = getAudioContext();
@@ -464,11 +365,61 @@ const App: React.FC = () => {
             }
           };
           
+          setMessages(messagesToDisplay); // Display text right before playing
           source.start();
-          if (onStart) onStart();
       } catch (e) {
           throw e; // Re-throw to trigger fallback
       }
+  };
+
+  const speakSystemMessage = async (displayText: string) => {
+    if (isProcessingRef.current) return;
+    setHudState(HUDState.THINKING);
+    isProcessingRef.current = true;
+
+    // --- Step 1: Prepare message, but DON'T display it yet ---
+    const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
+    executeIntents(displayText);
+    memoryRef.current.push(modelMessage);
+    saveMemory();
+    setMessages([]); // Clear previous turn's messages
+    setIsAudioLoading(true);
+
+    // --- Step 2: Generate audio, then play and display text simultaneously ---
+    try {
+      const spokenText = applyPronunciationFix(displayText);
+      const audioPromise = generateSpeech(spokenText);
+      const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
+        setTimeout(() => resolve(null), 20000)
+      );
+      
+      const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
+      setIsAudioLoading(false);
+      
+      if (!isProcessingRef.current) return;
+
+      if (audioBuffer) {
+        try {
+            playAudio(audioBuffer, [modelMessage]);
+        } catch (audioError) {
+             console.error("Audio Playback Blocked. Displaying text only.", audioError);
+             setMessages([modelMessage]);
+             setHudState(HUDState.IDLE);
+             isProcessingRef.current = false;
+        }
+      } else {
+        console.log("Audio generation timed out or failed. Displaying text only.");
+        setMessages([modelMessage]);
+        setHudState(HUDState.IDLE);
+        isProcessingRef.current = false;
+      }
+    } catch(e) {
+      setIsAudioLoading(false);
+      console.error("Speak System Message Error:", e);
+      setMessages([modelMessage]);
+      setHudState(HUDState.IDLE);
+      isProcessingRef.current = false;
+    }
   };
 
   const processQuery = async (text: string) => {
@@ -477,59 +428,62 @@ const App: React.FC = () => {
     setHudState(HUDState.THINKING);
     isProcessingRef.current = true;
     
+    // --- Step 1: Display user's message immediately ---
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     memoryRef.current.push(userMessage);
     saveMemory();
     setMessages([userMessage]); 
 
     try {
-        const rawAiResponse = await generateTextResponse(text, user, memoryRef.current.map(m => ({ role: m.role, parts: [{ text: m.text }] })));
+        const historyForApi = memoryRef.current.slice(0, -1).map((msg: ChatMessage) => ({
+            role: msg.role,
+            parts: [{ text: msg.text }],
+        }));
+        const rawAiResponse = await generateTextResponse(text, user, historyForApi);
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
+        // --- Step 2: Prepare model message, but DON'T display it yet ---
+        const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
+        executeIntents(rawAiResponse);
+        memoryRef.current.push(modelMessage);
+        saveMemory();
+        setIsAudioLoading(true);
+
+        // --- Step 3: Generate audio, then play and display text simultaneously ---
         const spokenAiResponse = applyPronunciationFix(rawAiResponse);
-        
-        // OPTIMIZATION: ADD TIMEOUT TO TTS GENERATION
         const audioPromise = generateSpeech(spokenAiResponse);
         const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
-            setTimeout(() => resolve(null), 8000)
+            setTimeout(() => resolve(null), 20000)
         );
         
         const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
+        setIsAudioLoading(false);
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
-        const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
-        executeIntents(rawAiResponse);
-
         if (audioBuffer) {
              try {
-                playAudio(audioBuffer, () => {
-                     setTimeout(() => {
-                        memoryRef.current.push(modelMessage);
-                        saveMemory();
-                        setMessages([userMessage, modelMessage]); 
-                     }, 50);
-                });
-            } catch (audioError) {
-                console.error("Audio Playback Blocked, falling back to Native", audioError);
-                memoryRef.current.push(modelMessage);
-                saveMemory();
+                playAudio(audioBuffer, [userMessage, modelMessage]);
+             } catch (audioError) {
+                console.error("Audio Playback Blocked. Displaying text only.", audioError);
                 setMessages([userMessage, modelMessage]);
-                speakNative(rawAiResponse); // FALLBACK
-            }
+                setHudState(HUDState.IDLE);
+                isProcessingRef.current = false;
+             }
         } else {
-             // FALLBACK TO NATIVE VOICE (Timeout or API Fail)
-             memoryRef.current.push(modelMessage);
-             saveMemory();
+             console.log("Audio generation timed out or failed. Displaying text only.");
              setMessages([userMessage, modelMessage]);
-             speakNative(rawAiResponse);
+             setHudState(HUDState.IDLE);
+             isProcessingRef.current = false;
         }
     } catch (e) {
+        setIsAudioLoading(false);
         console.error("Process Query Error", e);
         const errorMessage = 'Connection interrupted. Please try again.';
         const errorMsgObj: ChatMessage = { role: 'model', text: errorMessage, timestamp: Date.now() };
         setMessages([userMessage, errorMsgObj]);
-        speakNative(errorMessage); // Speak the error too
+        setHudState(HUDState.IDLE);
+        isProcessingRef.current = false;
     }
   };
 
@@ -541,16 +495,42 @@ const App: React.FC = () => {
     loadMemory(profile.mobile);
     
     setTimeout(() => {
-      const hour = new Date().getHours();
-      let greeting = 'Good morning';
-      if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
-      else if (hour >= 18) greeting = 'Good evening';
-      
-      const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
-      
-      const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\n${greeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${userName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`;
-      
-      speakSystemMessage(introMessage);
+      const performNetworkCheckAndGreet = async () => {
+        const networkCheckTimeout = 5000; // 5 seconds
+
+        try {
+          const audioPromise = generateSpeech("test");
+          const timeoutPromise = new Promise<null>((resolve) => 
+            setTimeout(() => resolve(null), networkCheckTimeout)
+          );
+          
+          const result = await Promise.race([audioPromise, timeoutPromise]);
+
+          if (result) {
+            // Network is stable
+            const hour = new Date().getHours();
+            let greeting = 'Good morning';
+            if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
+            else if (hour >= 18) greeting = 'Good evening';
+            
+            const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
+            
+            const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave نے design kiya hai.\n${greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye ${userName}, main aapki kis prakaar sahayata kar sakti hoon?`;
+            
+            speakSystemMessage(introMessage);
+          } else {
+            // Network is unstable
+            const unstableMessage = "Network connection unstable. Main online hoon, but responses slow ho sakte hain.";
+            speakSystemMessage(unstableMessage);
+          }
+        } catch (error) {
+          console.error("Network check failed:", error);
+          const errorMessage = "Network connection error. Please try again.";
+          speakSystemMessage(errorMessage);
+        }
+      };
+
+      performNetworkCheckAndGreet();
     }, 500);
   };
 
@@ -560,7 +540,6 @@ const App: React.FC = () => {
     setMessages([]);
     memoryRef.current = [];
     setHudState(HUDState.IDLE);
-    window.speechSynthesis.cancel();
   };
 
   const handleInstall = () => { if (installPrompt) { installPrompt.prompt(); setInstallPrompt(null); } };
@@ -583,7 +562,13 @@ const App: React.FC = () => {
                <HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} />
             </div>
             <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4">
-               <ChatPanel messages={messages} isSpeaking={hudState === HUDState.SPEAKING} userRole={user.role} hudState={hudState} />
+               <ChatPanel 
+                 messages={messages} 
+                 isSpeaking={hudState === HUDState.SPEAKING} 
+                 userRole={user.role} 
+                 hudState={hudState}
+                 isAudioLoading={isAudioLoading}
+               />
             </div>
           </div>
           <ControlDeck onMicClick={handleMicClick} hudState={hudState} />

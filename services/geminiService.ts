@@ -27,7 +27,7 @@ export const generateTextResponse = async (
     const ai = getAiClient(); // Initialize the client just before using it.
     
     const now = new Date();
-    const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
     
     let systemInstruction = `
@@ -76,7 +76,7 @@ export const generateTextResponse = async (
       - Your tone is softer and more emotionally aware.
       
       SPECIAL TASKS (ADMIN ONLY):
-      - Singing Full Song: If Chandan sir asks you to sing a full song, use Google Search to find the COMPLETE original lyrics and recite them exactly, without any personal touch or intro like "Suniye sir". Just the lyrics.
+      - Singing Full Song: If Chandan sir asks you to sing a full song, use Google Search for the lyrics. Then, recite them with a rhythmic and melodic tone. Aapko actual music nahi banana hai, bas ek 'song jaisa' feel dena hai by controlling your pace and emotion.
     `;
   } else {
      systemInstruction += `
@@ -86,7 +86,7 @@ export const generateTextResponse = async (
       - Friendly, helpful, sweet, neutral assistant.
       
       SPECIAL TASKS (USER):
-      - Singing: If a user asks "Gaana sunaao", you can sing a short chorus with musical notes (🎵).
+      - Singing: If a user asks "Gaana sunaao", sing a short chorus with musical notes (🎵). Recite the lyrics with a rhythmic and melodic tone to give a 'song jaisa' feel, even without real music.
     `;
   }
 
@@ -112,10 +112,12 @@ export const generateTextResponse = async (
     modelName = 'gemini-3-pro-preview';
     config.thinkingConfig = { thinkingBudget: 16384 }; // Reduced budget for slightly faster thinking
   }
+  
+  const contents = [...history, { role: 'user', parts: [{ text: cleanInput }] }];
 
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: history,
+    contents: contents,
     config: config,
   });
 

@@ -7,6 +7,7 @@ interface ChatPanelProps {
   isSpeaking: boolean;
   userRole?: UserRole;
   hudState?: HUDState;
+  isAudioLoading?: boolean;
 }
 
 interface TypewriterProps {
@@ -33,14 +34,14 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onTyping }) => {
     }, speed);
 
     return () => clearInterval(intervalId);
-  }, [text]);
+  }, [text, onTyping]);
 
   // Clean the text for display (remove SFX tags)
   const cleanText = displayedText.replace(/\[SFX:.*?\]/g, "").trim();
   return <span>{cleanText}</span>;
 };
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = UserRole.USER, hudState }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = UserRole.USER, hudState, isAudioLoading }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -51,7 +52,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = 
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isSpeaking]);
 
   // If there are no messages for the current turn, don't render the panel
   if (messages.length === 0) return null;
@@ -76,10 +77,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = 
           if (isUser) {
             label = userRole === UserRole.ADMIN ? 'ADMIN' : 'USER';
           }
-
-          const shouldAnimate = isLastModelMessage && (isSpeaking || (hudState === HUDState.THINKING));
           
-          // Clean text for non-animating model messages
+          const shouldAnimate = isLastModelMessage && isSpeaking;
+          const showAudioLoader = isLastModelMessage && isAudioLoading;
+          
           const cleanFullText = msg.text.replace(/\[SFX:.*?\]/g, "").trim();
 
           return (
@@ -95,11 +96,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isSpeaking, userRole = 
                       ) : (
                         <span className="whitespace-pre-wrap">{cleanFullText}</span>
                       )}
+                      {showAudioLoader && (
+                        <div className="inline-flex items-center gap-1 ml-2">
+                            <span className="w-1 h-1 bg-nexa-cyan/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
+                            <span className="w-1 h-1 bg-nexa-cyan/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span>
+                            <span className="w-1 h-1 bg-nexa-cyan/70 rounded-full animate-pulse"></span>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
                 <div className={`text-[8px] uppercase tracking-widest mt-1 opacity-50 ${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'}`}>
-                   [{label}] {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                   [{label}] {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hourCycle: 'h23'})}
                 </div>
               </div>
             </div>
