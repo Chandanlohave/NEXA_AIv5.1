@@ -170,6 +170,20 @@ const App: React.FC = () => {
     const savedConfig = localStorage.getItem('nexa_config');
     if (savedConfig) { setConfig(JSON.parse(savedConfig)); }
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setInstallPrompt(e); });
+
+    // GLOBAL TOUCH UNLOCK: Ensure AudioContext is ready on first touch anywhere
+    const unlockHandler = () => {
+        unlockAudioContext();
+        window.removeEventListener('touchstart', unlockHandler);
+        window.removeEventListener('click', unlockHandler);
+    };
+    window.addEventListener('touchstart', unlockHandler);
+    window.addEventListener('click', unlockHandler);
+
+    return () => {
+        window.removeEventListener('touchstart', unlockHandler);
+        window.removeEventListener('click', unlockHandler);
+    };
   }, []);
 
   useEffect(() => { localStorage.setItem('nexa_config', JSON.stringify(config)); }, [config]);
@@ -195,23 +209,42 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [user]);
 
-  useEffect(() => {
-    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+  // --- ROBUST SPEECH RECOGNITION SETUP ---
+  const initSpeechRecognition = () => {
+      if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-IN';
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-IN'; // Indian English for better recognition
 
-      recognitionRef.current.onstart = () => setHudState(HUDState.LISTENING);
-      recognitionRef.current.onend = () => { if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); };
-      recognitionRef.current.onerror = (event: any) => {
+      recognition.onstart = () => {
+          console.log("Recognition started");
+          setHudState(HUDState.LISTENING);
+      };
+      recognition.onend = () => {
+          console.log("Recognition ended");
+          if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE);
+      };
+      recognition.onerror = (event: any) => {
         console.error("Speech Error", event.error);
         if (event.error === 'aborted' || event.error === 'no-speech') { return; }
         setHudState(HUDState.IDLE);
+        // Optional: Speak an error for better feedback
+        // speakNative("System link unstable."); 
       };
-      recognitionRef.current.onresult = (event: any) => { processQuery(event.results[0][0].transcript); };
+      recognition.onresult = (event: any) => { 
+          const transcript = event.results[0][0].transcript;
+          console.log("Heard:", transcript);
+          processQuery(transcript); 
+      };
+      return recognition;
     }
+    return null;
+  };
+
+  useEffect(() => {
+    recognitionRef.current = initSpeechRecognition();
   }, [user]);
 
   const loadMemory = (mobile: string) => {
@@ -240,12 +273,54 @@ const App: React.FC = () => {
           source.buffer = buffer;
           source.connect(ctx.destination);
           source.start(0);
-          console.log("Audio Context Unlocked");
         } catch(e) {
           console.warn("Audio unlock failed (harmless if already unlocked)", e);
         }
       });
     }
+  };
+
+  // --- FALLBACK NATIVE TTS (HYBRID VOICE ENGINE) ---
+  const speakNative = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    
+    // Stop any current speaking
+    window.speechSynthesis.cancel();
+
+    // Clean text
+    const cleanText = text.replace(/\[\[.*?\]\]/g, "").replace(/\[SFX:.*?\]/g, "").trim();
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    
+    // Attempt to select a better voice
+    const voices = window.speechSynthesis.getVoices();
+    // Try to find a Google voice or a female voice, preferably English/Hindi
+    const preferredVoice = voices.find(v => (v.name.includes('Google') || v.name.includes('Samantha')) && (v.lang.includes('en') || v.lang.includes('hi')));
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    utterance.rate = 1.0; 
+    utterance.pitch = 1.0;
+    
+    utterance.onstart = () => {
+        setHudState(HUDState.SPEAKING);
+    };
+    utterance.onend = () => {
+        if(isProcessingRef.current) {
+            setHudState(HUDState.IDLE);
+            isProcessingRef.current = false;
+        }
+    };
+    utterance.onerror = () => {
+        if(isProcessingRef.current) {
+            setHudState(HUDState.IDLE);
+            isProcessingRef.current = false;
+        }
+    };
+    
+    // Ensure state is set even if start event lags
+    setHudState(HUDState.SPEAKING);
+    window.speechSynthesis.speak(utterance);
   };
 
   // --- Global Pronunciation Fix ---
@@ -255,23 +330,20 @@ const App: React.FC = () => {
   };
 
   const handleMicClick = () => {
-    unlockAudioContext(); // Ensure audio is unlocked on interaction
+    unlockAudioContext(); 
     
     // Interrupt logic for THINKING or SPEAKING states
     if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING) {
         isProcessingRef.current = false;
         if (recognitionRef.current) recognitionRef.current.abort();
+        window.speechSynthesis.cancel(); // Also stop native speech
         
-        // Force stop any playing audio
+        // Force stop any playing audio from WebAudio
         if (audioContextRef.current) {
-          // A more robust way to stop audio without suspending the whole context
-          // This is a placeholder for a more complex audio source management
+           audioContextRef.current.suspend().then(() => audioContextRef.current?.resume());
         }
         
         setHudState(HUDState.IDLE);
-        setTimeout(() => {
-            try { recognitionRef.current?.start(); } catch(e) { console.warn("Could not start recognition", e); }
-        }, 100);
         return;
     }
 
@@ -282,10 +354,19 @@ const App: React.FC = () => {
             recognitionRef.current.stop();
         }
     } else {
+        // ROBUST START: Re-init if null
+        if (!recognitionRef.current) {
+            recognitionRef.current = initSpeechRecognition();
+        }
         try {
             recognitionRef.current?.start();
         } catch (e) {
-            console.warn("Recognition could not be started", e);
+            console.warn("Recognition start error, resetting...", e);
+            // If already started or crashed, hard reset
+            recognitionRef.current?.stop();
+            setTimeout(() => {
+                try { recognitionRef.current?.start(); } catch(err) { console.error("Retry failed", err); }
+            }, 100);
         }
     }
   };
@@ -314,74 +395,72 @@ const App: React.FC = () => {
       // 1. Generate audio first
       const spokenText = applyPronunciationFix(displayText);
       const audioBuffer = await generateSpeech(spokenText);
-      if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
+      
+      // Check for processing interruption
+      if (!isProcessingRef.current) return;
 
-      // 2. PREPARE THE UI DATA, BUT DON'T SHOW YET
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
       
       executeIntents(displayText);
 
       if (audioBuffer) {
-        // 3. TRY TO PLAY AUDIO. If it fails (autoplay block), fallback to text-only.
+        // 3. TRY GEMINI VOICE
         try {
-            playAudio(audioBuffer);
-            // Delay the text slightly to sync with the start of the audio output hardware
-            setTimeout(() => {
-                memoryRef.current.push(modelMessage);
-                saveMemory();
-                setMessages([modelMessage]);
-            }, 50);
+            playAudio(audioBuffer, () => {
+                 // On success playback start, show text
+                 setTimeout(() => {
+                    memoryRef.current.push(modelMessage);
+                    saveMemory();
+                    setMessages([modelMessage]);
+                 }, 50);
+            });
         } catch (audioError) {
-             console.error("Audio Playback Blocked", audioError);
-             // Fallback: Show text immediately and simulate speaking time
+             console.error("Audio Playback Blocked, falling back to Native", audioError);
              memoryRef.current.push(modelMessage);
              saveMemory();
              setMessages([modelMessage]);
-             setHudState(HUDState.SPEAKING);
-             setTimeout(() => {
-                 if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; }
-             }, displayText.length * 40 + 1000);
+             speakNative(displayText); // FALLBACK
         }
       } else {
-        // FALLBACK FOR NO AUDIO DATA
+        // FALLBACK TO NATIVE VOICE IF GEMINI API FAILS (Null buffer)
         memoryRef.current.push(modelMessage);
         saveMemory();
         setMessages([modelMessage]);
-        
-        setHudState(HUDState.SPEAKING);
-        setTimeout(() => {
-             if(isProcessingRef.current) {
-                setHudState(HUDState.IDLE);
-                isProcessingRef.current = false;
-             }
-        }, displayText.length * 40 + 1000);
+        speakNative(displayText);
       }
     } catch(e) {
       console.error("Speak System Message Error:", e);
-      setHudState(HUDState.IDLE);
-      isProcessingRef.current = false;
+      // Even on system error, try to speak native if we have text
+      speakNative(displayText);
     }
   };
 
-  const playAudio = (buffer: ArrayBuffer) => {
+  const playAudio = (buffer: ArrayBuffer, onStart?: () => void) => {
       if (!isProcessingRef.current) return;
       
       const ctx = getAudioContext();
-      // Ensure context is running. If not, try to resume (last ditch effort)
       if (ctx.state === 'suspended') { ctx.resume(); }
 
       setHudState(HUDState.SPEAKING);
-      const decodedBuffer = pcmToAudioBuffer(buffer, ctx);
-      const source = ctx.createBufferSource();
-      source.buffer = decodedBuffer;
-      source.connect(ctx.destination);
-      source.onended = () => { 
-        if(isProcessingRef.current) {
-          setHudState(HUDState.IDLE); 
-          isProcessingRef.current = false; 
-        }
-      };
-      source.start();
+      
+      try {
+          const decodedBuffer = pcmToAudioBuffer(buffer, ctx);
+          const source = ctx.createBufferSource();
+          source.buffer = decodedBuffer;
+          source.connect(ctx.destination);
+          
+          source.onended = () => { 
+            if(isProcessingRef.current) {
+              setHudState(HUDState.IDLE); 
+              isProcessingRef.current = false; 
+            }
+          };
+          
+          source.start();
+          if (onStart) onStart();
+      } catch (e) {
+          throw e; // Re-throw to trigger fallback
+      }
   };
 
   const processQuery = async (text: string) => {
@@ -408,45 +487,37 @@ const App: React.FC = () => {
 
         if (audioBuffer) {
              try {
-                playAudio(audioBuffer);
-                setTimeout(() => {
-                    memoryRef.current.push(modelMessage);
-                    saveMemory();
-                    setMessages([userMessage, modelMessage]); 
-                }, 50);
+                playAudio(audioBuffer, () => {
+                     setTimeout(() => {
+                        memoryRef.current.push(modelMessage);
+                        saveMemory();
+                        setMessages([userMessage, modelMessage]); 
+                     }, 50);
+                });
             } catch (audioError) {
-                console.error("Audio Playback Blocked", audioError);
+                console.error("Audio Playback Blocked, falling back to Native", audioError);
                 memoryRef.current.push(modelMessage);
                 saveMemory();
                 setMessages([userMessage, modelMessage]);
-                setHudState(HUDState.SPEAKING);
-                setTimeout(() => {
-                    if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; }
-                }, rawAiResponse.length * 40 + 1000);
+                speakNative(rawAiResponse); // FALLBACK
             }
         } else {
+             // FALLBACK TO NATIVE VOICE (e.g. if API Key invalid or Quota exceeded)
              memoryRef.current.push(modelMessage);
              saveMemory();
              setMessages([userMessage, modelMessage]);
-             setHudState(HUDState.SPEAKING);
-             setTimeout(() => {
-                 if(isProcessingRef.current) {
-                   setHudState(HUDState.IDLE);
-                   isProcessingRef.current = false;
-                 }
-             }, rawAiResponse.length * 40 + 1000);
+             speakNative(rawAiResponse);
         }
     } catch (e) {
         console.error("Process Query Error", e);
-        const errorMessage: ChatMessage = { role: 'model', text: 'Connection interrupted. Please try again.', timestamp: Date.now() };
-        setMessages([userMessage, errorMessage]);
-        setHudState(HUDState.IDLE);
-        isProcessingRef.current = false;
+        const errorMessage = 'Connection interrupted. Please try again.';
+        const errorMsgObj: ChatMessage = { role: 'model', text: errorMessage, timestamp: Date.now() };
+        setMessages([userMessage, errorMsgObj]);
+        speakNative(errorMessage); // Speak the error too
     }
   };
 
   const handleLogin = (profile: UserProfile) => {
-    // VERCEL/MOBILE FIX: UNLOCK AUDIO IMMEDIATELY ON USER CLICK
     unlockAudioContext();
 
     setUser(profile);
@@ -473,6 +544,7 @@ const App: React.FC = () => {
     setMessages([]);
     memoryRef.current = [];
     setHudState(HUDState.IDLE);
+    window.speechSynthesis.cancel();
   };
 
   const handleInstall = () => { if (installPrompt) { installPrompt.prompt(); setInstallPrompt(null); } };
