@@ -291,20 +291,26 @@ const App: React.FC = () => {
       setHudState(HUDState.THINKING);
       isProcessingRef.current = true;
 
+      // Show text immediately to improve perceived performance
+      const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
+      memoryRef.current.push(modelMessage);
+      saveMemory();
+      setMessages([modelMessage]);
+      
+      executeIntents(displayText);
+
+      // Generate audio in the background
       const cleanDisplay = displayText.replace(/\[\[.*?\]\]/g, "").replace(/\[SFX:.*?\]/g, "");
       const spokenText = applyPronunciationFix(cleanDisplay);
       const audioBuffer = await generateSpeech(spokenText);
       if (!isProcessingRef.current) return;
 
-      const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
-      memoryRef.current.push(modelMessage);
-      saveMemory();
-      setMessages([modelMessage]); // Only show this message
-      
-      executeIntents(displayText);
-
-      if (audioBuffer) { playAudio(audioBuffer); } 
-      else { setHudState(HUDState.IDLE); isProcessingRef.current = false; }
+      if (audioBuffer) {
+        playAudio(audioBuffer);
+      } else {
+        setHudState(HUDState.IDLE);
+        isProcessingRef.current = false;
+      }
   };
 
   const playAudio = (buffer: ArrayBuffer) => {
@@ -328,28 +334,37 @@ const App: React.FC = () => {
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     memoryRef.current.push(userMessage);
     saveMemory();
-    setMessages([userMessage]); // Display only current user message
+    setMessages([userMessage]);
 
     try {
         const rawAiResponse = await generateTextResponse(text, user, memoryRef.current.map(m => ({ role: m.role, parts: [{ text: m.text }] })));
         if (!isProcessingRef.current) return;
 
+        // Display AI text response immediately for better UX
+        const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
+        memoryRef.current.push(modelMessage);
+        saveMemory();
+        setMessages([userMessage, modelMessage]);
+        
         executeIntents(rawAiResponse);
         
+        // Generate and play audio in the background
         const spokenAiResponse = applyPronunciationFix(rawAiResponse);
         const audioBuffer = await generateSpeech(spokenAiResponse);
         if (!isProcessingRef.current) return;
 
-        const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
-        memoryRef.current.push(modelMessage);
-        saveMemory();
-        setMessages([userMessage, modelMessage]); // Display user message and model response
-
-        if (audioBuffer) { playAudio(audioBuffer); } 
-        else { setTimeout(() => setHudState(HUDState.IDLE), 1000); isProcessingRef.current = false; }
+        if (audioBuffer) {
+            playAudio(audioBuffer);
+        } else {
+            setTimeout(() => {
+                setHudState(HUDState.IDLE);
+                isProcessingRef.current = false;
+            }, 1000);
+        }
     } catch (e) {
         console.error("Process Query Error", e);
-        setHudState(HUDState.IDLE); isProcessingRef.current = false;
+        setHudState(HUDState.IDLE);
+        isProcessingRef.current = false;
     }
   };
 

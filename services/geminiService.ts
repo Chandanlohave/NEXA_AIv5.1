@@ -1,12 +1,20 @@
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { UserProfile, UserRole } from "../types";
 
-// Initialize Gemini Client
-// CRITICAL FIX: Use only process.env.API_KEY for this environment.
-const apiKey = process.env.API_KEY;
-const ai = new GoogleGenAI({ apiKey: apiKey });
+// DO NOT initialize the client here. We will do it inside the functions.
+// This is the main fix for the black screen issue.
 
 const CREATOR_FULL_NAME = "Chandan Lohave";
+
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    // This will now throw a clear error in the console instead of crashing the app.
+    throw new Error("API_KEY environment variable not found.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const generateTextResponse = async (
   input: string, 
@@ -14,12 +22,14 @@ export const generateTextResponse = async (
   history: {role: string, parts: {text: string}[]}[]
 ): Promise<string> => {
   
-  const now = new Date();
-  const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-  
-  // NEW, STRICT SYSTEM PROMPT
-  let systemInstruction = `
+  try {
+    const ai = getAiClient(); // Initialize the client just before using it.
+    
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+    
+    let systemInstruction = `
     **CORE IDENTITY:** You are NEXA, a futuristic female AI assistant that communicates exclusively in Hinglish (Hindi-English mix).
 
     **STRICT LANGUAGE RULES:**
@@ -79,8 +89,6 @@ export const generateTextResponse = async (
     `;
   }
 
-
-  // --- SMART MODEL SWITCHING LOGIC ---
   const isComplexQuery = /analyze|explain|reason|plan|code|solve|derive|complex|why|how|detail|think/i.test(input) || input.length > 80;
   const adminOverride = input.toLowerCase().startsWith("think:");
   const shouldThink = isComplexQuery || adminOverride;
@@ -104,16 +112,16 @@ export const generateTextResponse = async (
     config.thinkingConfig = { thinkingBudget: 32768 };
   }
 
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [ ...history, { role: 'user', parts: [{ text: cleanInput }] } ],
-      config: config,
-    });
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: [ ...history, { role: 'user', parts: [{ text: cleanInput }] } ],
+    config: config,
+  });
 
-    return response.text || "Systems uncertain. Please retry.";
+  return response.text || "Systems uncertain. Please retry.";
+
   } catch (error) {
-    console.error("Gemini Text Error:", JSON.stringify(error, null, 2));
+    console.error("Gemini Text Error:", error);
     return "Connection interrupted. Retrying neural link.";
   }
 };
@@ -125,6 +133,8 @@ export const generateSpeech = async (text: string): Promise<ArrayBuffer | null> 
   if (cleanText.length === 0) return null;
 
   try {
+    const ai = getAiClient(); // Initialize the client just before using it.
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: cleanText }] }],
@@ -150,7 +160,7 @@ export const generateSpeech = async (text: string): Promise<ArrayBuffer | null> 
     }
     return null;
   } catch (error) {
-    console.error("Gemini TTS Error:", JSON.stringify(error, null, 2));
+    console.error("Gemini TTS Error:", error);
     return null;
   }
 };
