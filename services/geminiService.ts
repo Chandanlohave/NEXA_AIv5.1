@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { UserProfile, UserRole } from "../types";
 
@@ -94,7 +95,7 @@ export const generateTextResponse = async (
   const shouldThink = isComplexQuery || adminOverride;
   const cleanInput = input.replace(/^think:\s*/i, '');
 
-  let modelName = 'gemini-2.5-flash-lite'; 
+  let modelName = 'gemini-2.5-flash'; 
   const config: any = {
     systemInstruction: systemInstruction,
     temperature: 0.7,
@@ -114,7 +115,7 @@ export const generateTextResponse = async (
 
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: [ ...history, { role: 'user', parts: [{ text: cleanInput }] } ],
+    contents: history,
     config: config,
   });
 
