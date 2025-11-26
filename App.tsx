@@ -1,5 +1,17 @@
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
@@ -118,11 +130,30 @@ const InstallBanner: React.FC<{ prompt: any, onInstall: () => void }> = ({ promp
   );
 };
 
-const StatusBar = ({ role, onLogout, onSettings }: any) => (
+const StatusBar = ({ role, onLogout, onSettings, latency }: any) => (
   <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-nexa-cyan/10 bg-black/80 backdrop-blur-md z-40 relative">
-    <div className="flex items-center gap-4"><div className="flex flex-col items-start"><div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">System Online</div><div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div></div></div>
-    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div>
-    <div className="flex items-center gap-4">{role === UserRole.ADMIN && (<button onClick={onSettings} className="p-2 hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>)}<button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button></div>
+    <div className="flex items-center gap-4">
+      <div className="flex flex-col items-start">
+        <div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">System Online</div>
+        <div className="flex gap-1 mt-1">
+          <div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div>
+          <div className="w-2 h-1 bg-nexa-cyan/50"></div>
+          <div className="w-1 h-1 bg-nexa-cyan/20"></div>
+        </div>
+      </div>
+      {latency !== null && (
+        <div className="hidden sm:block text-[9px] font-mono text-nexa-cyan/60 border-l border-nexa-cyan/20 pl-4">
+          API LATENCY: <span className="text-white">{latency}ms</span>
+        </div>
+      )}
+    </div>
+    <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none">
+      <div className="text-xl font-bold tracking-[0.3em] text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div>
+    </div>
+    <div className="flex items-center gap-4">
+      {role === UserRole.ADMIN && (<button onClick={onSettings} className="p-2 hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>)}
+      <button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button>
+    </div>
   </div>
 );
 
@@ -148,18 +179,19 @@ const pcmToAudioBuffer = (pcmData: ArrayBuffer, context: AudioContext): AudioBuf
 // --- MAIN APP ---
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]); // UI state: Only shows current turn
+  const [chatLog, setChatLog] = useState<ChatMessage[]>([]); // Full visible chat history
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [config, setConfig] = useState<AppConfig>({ introText: "", animationsEnabled: true, hudRotationSpeed: 1, ambientSoundEnabled: true });
+  const [latency, setLatency] = useState<number | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const ambientRef = useRef(new AmbientGenerator());
   const isProcessingRef = useRef(false);
-  const memoryRef = useRef<ChatMessage[]>([]); // Full conversation history for AI
+  const memoryRef = useRef<ChatMessage[]>([]); // Full conversation history for AI memory
 
   useEffect(() => {
     const savedUser = localStorage.getItem('nexa_user');
@@ -172,7 +204,6 @@ const App: React.FC = () => {
     if (savedConfig) { setConfig(JSON.parse(savedConfig)); }
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setInstallPrompt(e); });
 
-    // GLOBAL TOUCH UNLOCK: Ensure AudioContext is ready on first touch anywhere
     const unlockHandler = () => {
         unlockAudioContext();
         window.removeEventListener('touchstart', unlockHandler);
@@ -200,27 +231,25 @@ const App: React.FC = () => {
     const checkTime = () => {
       const now = new Date();
       if (now.getHours() === 23 && now.getMinutes() === 0) {
-        speakSystemMessage("Sir… 11 baj chuke hain. Kal aapko Encave Cafe duty bhi karni hai. Please rest kar lijiye… main yahin hoon.");
+        speakSystemMessage("Sir… 11 baj chuke hain. Kal aapko Encave Cafe duty bhi karni hai. Please rest kar lijiye… main yahin hoon.", user);
       }
       if (now.getHours() === 8 && now.getMinutes() === 0) {
-        speakSystemMessage("Sir… aaj Encave Café duty hai, time se tayar ho jaiye.");
+        speakSystemMessage("Sir… aaj Encave Café duty hai, time se tayar ho jaiye.", user);
       }
     };
     const interval = setInterval(checkTime, 60000);
     return () => clearInterval(interval);
   }, [user]);
 
-  // --- ROBUST SPEECH RECOGNITION SETUP ---
   const initSpeechRecognition = () => {
       if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const SpeechGrammarList = (window as any).SpeechGrammarList || (window as any).webkitSpeechGrammarList;
+      const SpeechGrammarList = (window as any).SpeechGrammarList || (window as any).webkitGrammarList;
       
       const recognition = new SpeechRecognition();
       
       if (SpeechGrammarList) {
           const speechRecognitionList = new SpeechGrammarList();
-          // JSGF format for grammar. Increase weight of these specific words.
           const grammar = '#JSGF V1.0; grammar nexa_names; public <name> = Nexa | Chandan ;';
           speechRecognitionList.addFromString(grammar, 1);
           recognition.grammars = speechRecognitionList;
@@ -228,16 +257,10 @@ const App: React.FC = () => {
 
       recognition.continuous = false;
       recognition.interimResults = false;
-      recognition.lang = 'en-IN'; // Indian English for better recognition
+      recognition.lang = 'en-IN';
 
-      recognition.onstart = () => {
-          console.log("Recognition started");
-          setHudState(HUDState.LISTENING);
-      };
-      recognition.onend = () => {
-          console.log("Recognition ended");
-          if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE);
-      };
+      recognition.onstart = () => { setHudState(HUDState.LISTENING); };
+      recognition.onend = () => { if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); };
       recognition.onerror = (event: any) => {
         console.error("Speech Error", event.error);
         if (event.error === 'aborted' || event.error === 'no-speech') { return; }
@@ -245,7 +268,6 @@ const App: React.FC = () => {
       };
       recognition.onresult = (event: any) => { 
           const transcript = event.results[0][0].transcript;
-          console.log("Heard:", transcript);
           processQuery(transcript); 
       };
       return recognition;
@@ -259,11 +281,23 @@ const App: React.FC = () => {
 
   const loadMemory = (mobile: string) => {
     const history = localStorage.getItem(`nexa_chat_${mobile}`);
-    if (history) { memoryRef.current = JSON.parse(history); }
+    if (history) { 
+      try {
+        const parsedHistory = JSON.parse(history);
+        memoryRef.current = parsedHistory; 
+      } catch (e) {
+        console.error("Failed to parse chat history from localStorage", e);
+        memoryRef.current = [];
+      }
+    } else {
+      memoryRef.current = [];
+    }
   };
 
-  const saveMemory = () => {
-    if (user) { localStorage.setItem(`nexa_chat_${user.mobile}`, JSON.stringify(memoryRef.current)); }
+  const saveMemory = (currentUser: UserProfile | null) => {
+    if (currentUser) {
+      localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current));
+    }
   };
 
   const getAudioContext = () => {
@@ -271,7 +305,6 @@ const App: React.FC = () => {
     return audioContextRef.current;
   };
 
-  // --- AUDIO UNLOCKER FOR VERCEL/MOBILE ---
   const unlockAudioContext = () => {
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
@@ -282,9 +315,7 @@ const App: React.FC = () => {
           source.buffer = buffer;
           source.connect(ctx.destination);
           source.start(0);
-        } catch(e) {
-          console.warn("Audio unlock failed (harmless if already unlocked)", e);
-        }
+        } catch(e) { console.warn("Audio unlock failed", e); }
       });
     }
   };
@@ -299,24 +330,18 @@ const App: React.FC = () => {
     if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING) {
         isProcessingRef.current = false;
         if (recognitionRef.current) recognitionRef.current.abort();
-        
         if (audioContextRef.current) {
            audioContextRef.current.suspend().then(() => audioContextRef.current?.resume());
         }
-        
         setHudState(HUDState.IDLE);
         return;
     }
 
     if (hudState === HUDState.LISTENING) {
         setHudState(HUDState.IDLE); 
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
+        if (recognitionRef.current) { recognitionRef.current.stop(); }
     } else {
-        if (!recognitionRef.current) {
-            recognitionRef.current = initSpeechRecognition();
-        }
+        if (!recognitionRef.current) { recognitionRef.current = initSpeechRecognition(); }
         try {
             recognitionRef.current?.start();
         } catch (e) {
@@ -330,7 +355,7 @@ const App: React.FC = () => {
   };
 
   const executeIntents = (text: string) => {
-     const intentRegex = /\[\[(.*?):(.*?)\]\]/g;
+     const intentRegex = /\[\[(WHATSAPP|CALL|OPEN):(.*?)\]\]/g;
      let match;
      while ((match = intentRegex.exec(text)) !== null) {
         const command = match[1].toUpperCase();
@@ -344,7 +369,7 @@ const App: React.FC = () => {
      }
   };
 
-  const playAudio = (buffer: ArrayBuffer, messagesToDisplay: ChatMessage[]) => {
+  const playAudio = (buffer: ArrayBuffer) => {
       if (!isProcessingRef.current) return;
       
       const ctx = getAudioContext();
@@ -364,62 +389,72 @@ const App: React.FC = () => {
               isProcessingRef.current = false; 
             }
           };
-          
-          setMessages(messagesToDisplay); // Display text right before playing
           source.start();
       } catch (e) {
-          throw e; // Re-throw to trigger fallback
+          throw e;
       }
   };
 
-  const speakSystemMessage = async (displayText: string) => {
-    if (isProcessingRef.current) return;
+  const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => {
+    if (isProcessingRef.current || !currentUser) return;
     setHudState(HUDState.THINKING);
     isProcessingRef.current = true;
+    
+    const textForDisplayAndMemory = displayText.replace(/लोহवे/g, 'Lohave');
+    const spokenText = applyPronunciationFix(textForDisplayAndMemory);
+    const modelMessage: ChatMessage = { role: 'model', text: textForDisplayAndMemory, timestamp: Date.now() };
 
-    // --- Step 1: Prepare message, but DON'T display it yet ---
-    const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
-    executeIntents(displayText);
     memoryRef.current.push(modelMessage);
-    saveMemory();
-    setMessages([]); // Clear previous turn's messages
+    saveMemory(currentUser);
     setIsAudioLoading(true);
 
-    // --- Step 2: Generate audio, then play and display text simultaneously ---
     try {
-      const spokenText = applyPronunciationFix(displayText);
-      const audioPromise = generateSpeech(spokenText);
-      const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
-        setTimeout(() => resolve(null), 20000)
-      );
-      
-      const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
+      const audioBuffer = await generateSpeech(spokenText);
       setIsAudioLoading(false);
-      
       if (!isProcessingRef.current) return;
 
       if (audioBuffer) {
         try {
-            playAudio(audioBuffer, [modelMessage]);
+          setChatLog(prev => [...prev, modelMessage]);
+          playAudio(audioBuffer);
         } catch (audioError) {
-             console.error("Audio Playback Blocked. Displaying text only.", audioError);
-             setMessages([modelMessage]);
-             setHudState(HUDState.IDLE);
-             isProcessingRef.current = false;
+          console.error("Audio Playback Blocked.", audioError);
+          setHudState(HUDState.IDLE);
+          isProcessingRef.current = false;
         }
       } else {
-        console.log("Audio generation timed out or failed. Displaying text only.");
-        setMessages([modelMessage]);
+        console.log("Audio generation failed for system message.");
+        setChatLog(prev => [...prev, modelMessage]);
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
       }
     } catch(e) {
       setIsAudioLoading(false);
       console.error("Speak System Message Error:", e);
-      setMessages([modelMessage]);
+      setChatLog(prev => [...prev, modelMessage]);
       setHudState(HUDState.IDLE);
       isProcessingRef.current = false;
     }
+  };
+
+  const handleAdminNotifications = (responseText: string, currentUser: UserProfile | null): string => {
+      if (currentUser?.role !== UserRole.USER) {
+          return responseText; // Only log notifications from standard users
+      }
+
+      const adminNotifyRegex = /\[\[ADMIN_NOTIFY:(.*?)\]\]/g;
+      return responseText.replace(adminNotifyRegex, (match, message) => {
+          try {
+              const notificationsJSON = localStorage.getItem('nexa_admin_notifications');
+              let notifications = notificationsJSON ? JSON.parse(notificationsJSON) : [];
+              const timestamp = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute:'2-digit' });
+              notifications.push(`${message.trim()} (at ${timestamp})`);
+              localStorage.setItem('nexa_admin_notifications', JSON.stringify(notifications));
+          } catch(e) {
+              console.error("Failed to save admin notification:", e);
+          }
+          return ''; // Strip tag from the response that user sees
+      });
   };
 
   const processQuery = async (text: string) => {
@@ -428,60 +463,69 @@ const App: React.FC = () => {
     setHudState(HUDState.THINKING);
     isProcessingRef.current = true;
     
-    // --- Step 1: Display user's message immediately ---
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     memoryRef.current.push(userMessage);
-    saveMemory();
-    setMessages([userMessage]); 
+    saveMemory(user);
+    setChatLog(prev => [...prev, userMessage]); 
 
     try {
-        const historyForApi = memoryRef.current.slice(0, -1).map((msg: ChatMessage) => ({
-            role: msg.role,
-            parts: [{ text: msg.text }],
-        }));
-        const rawAiResponse = await generateTextResponse(text, user, historyForApi);
-        if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
-
-        // --- Step 2: Prepare model message, but DON'T display it yet ---
-        const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
-        executeIntents(rawAiResponse);
-        memoryRef.current.push(modelMessage);
-        saveMemory();
-        setIsAudioLoading(true);
-
-        // --- Step 3: Generate audio, then play and display text simultaneously ---
-        const spokenAiResponse = applyPronunciationFix(rawAiResponse);
-        const audioPromise = generateSpeech(spokenAiResponse);
-        const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
-            setTimeout(() => resolve(null), 20000)
-        );
+        const startTime = performance.now();
         
-        const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
+        // PERFORMANCE FIX: Limit the history sent to the API to prevent high latency on long conversations.
+        const MAX_HISTORY_MESSAGES = 10; // Approx 5 turns
+        const recentHistory = memoryRef.current.slice(0, -1); // Get all messages except the current one
+        const historyForApi = recentHistory.slice(-MAX_HISTORY_MESSAGES).map((msg: ChatMessage) => ({
+            role: msg.role, parts: [{ text: msg.text }],
+        }));
+        
+        const rawAiResponse = await generateTextResponse(text, user, historyForApi);
+        const endTime = performance.now();
+        setLatency(Math.round(endTime - startTime));
+        
+        if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
+        
+        const responseAfterNotificationCheck = handleAdminNotifications(rawAiResponse, user);
+        executeIntents(responseAfterNotificationCheck);
+
+        const textForDisplayAndMemory = responseAfterNotificationCheck
+            .replace(/\[\[.*?\]\]/g, '') // Remove all intent tags for a clean display
+            .trim()
+            .replace(/लोহवे/g, 'Lohave');
+        
+        const spokenAiResponse = applyPronunciationFix(textForDisplayAndMemory);
+        
+        const modelMessage: ChatMessage = { role: 'model', text: textForDisplayAndMemory, timestamp: Date.now() };
+        memoryRef.current.push(modelMessage);
+        saveMemory(user);
+
+        setIsAudioLoading(true);
+        const audioBuffer = await generateSpeech(spokenAiResponse);
         setIsAudioLoading(false);
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
         if (audioBuffer) {
              try {
-                playAudio(audioBuffer, [userMessage, modelMessage]);
+                setChatLog(prev => [...prev, modelMessage]);
+                playAudio(audioBuffer);
              } catch (audioError) {
-                console.error("Audio Playback Blocked. Displaying text only.", audioError);
-                setMessages([userMessage, modelMessage]);
+                console.error("Audio Playback Blocked.", audioError);
                 setHudState(HUDState.IDLE);
                 isProcessingRef.current = false;
              }
         } else {
-             console.log("Audio generation timed out or failed. Displaying text only.");
-             setMessages([userMessage, modelMessage]);
+             console.log("Audio generation failed.");
+             setChatLog(prev => [...prev, modelMessage]);
              setHudState(HUDState.IDLE);
              isProcessingRef.current = false;
         }
     } catch (e) {
         setIsAudioLoading(false);
         console.error("Process Query Error", e);
-        const errorMessage = 'Connection interrupted. Please try again.';
-        const errorMsgObj: ChatMessage = { role: 'model', text: errorMessage, timestamp: Date.now() };
-        setMessages([userMessage, errorMsgObj]);
+        const errorMessage: ChatMessage = { role: 'model', text: 'Connection interrupted. Please try again.', timestamp: Date.now() };
+        setChatLog(prev => [...prev, errorMessage]);
+        memoryRef.current.push(errorMessage);
+        saveMemory(user);
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
     }
@@ -489,31 +533,52 @@ const App: React.FC = () => {
 
   const handleLogin = (profile: UserProfile) => {
     unlockAudioContext();
-
     setUser(profile);
     setHudState(HUDState.THINKING);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
+    setChatLog([]);
     loadMemory(profile.mobile);
-    
-    // Removed unstable network check for a faster, more optimistic startup.
+  
     setTimeout(() => {
-      const hour = new Date().getHours();
-      let greeting = 'Good morning';
-      if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
-      else if (hour >= 18) greeting = 'Good evening';
-      
       const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
-      
-      const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave نے design kiya hai.\n${greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye ${userName}, main aapki kis prakaar sahayata kar sakti hoon?`;
-      
-      speakSystemMessage(introMessage);
+      let loginMessage = '';
+      let notificationPrefix = '';
+
+      if (profile.role === UserRole.ADMIN) {
+        const notificationsJSON = localStorage.getItem('nexa_admin_notifications');
+        if (notificationsJSON) {
+          try {
+            const notifications: string[] = JSON.parse(notificationsJSON);
+            if (notifications.length > 0) {
+              const notificationSummary = notifications.join(' aur ');
+              notificationPrefix = `Sir, welcome back. Ek update hai... jab aap offline the, ${notificationSummary}. Maine unhe politely mana kar diya, I hope maine aapse bina puche sahi decision liya.`;
+              localStorage.removeItem('nexa_admin_notifications');
+            }
+          } catch(e) { /* ignore corrupted data */ }
+        }
+      }
+
+      if (notificationPrefix) {
+        loginMessage = notificationPrefix;
+      } else {
+        if (memoryRef.current.length > 0) {
+          loginMessage = `Welcome back, ${userName}. Main ready hoon.`;
+        } else {
+          const hour = new Date().getHours();
+          let greeting = 'Good morning';
+          if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
+          else if (hour >= 18) greeting = 'Good evening';
+          loginMessage = `मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave نے design kiya hai.\n${greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye ${userName}, main aapki kis prakaar sahayata kar sakti hoon?`;
+        }
+      }
+      speakSystemMessage(loginMessage, profile);
     }, 500);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('nexa_user');
-    setMessages([]);
+    setChatLog([]);
     memoryRef.current = [];
     setHudState(HUDState.IDLE);
   };
@@ -521,9 +586,12 @@ const App: React.FC = () => {
   const handleInstall = () => { if (installPrompt) { installPrompt.prompt(); setInstallPrompt(null); } };
 
   const handleClearMemory = () => {
-    setMessages([]);
+    const currentUser = user;
+    setChatLog([]);
     memoryRef.current = [];
-    if (user) { localStorage.removeItem(`nexa_chat_${user.mobile}`); }
+    if (currentUser) {
+      localStorage.removeItem(`nexa_chat_${currentUser.mobile}`);
+    }
   };
 
   return (
@@ -532,15 +600,14 @@ const App: React.FC = () => {
       {!user ? ( <Auth onLogin={handleLogin} /> ) : (
         <>
           <InstallBanner prompt={installPrompt} onInstall={handleInstall} />
-          <StatusBar role={user.role} onLogout={handleLogout} onSettings={() => setAdminPanelOpen(true)} />
+          <StatusBar role={user.role} onLogout={handleLogout} onSettings={() => setAdminPanelOpen(true)} latency={latency} />
           <div className="flex-1 relative flex flex-col items-center min-h-0 w-full">
             <div className="flex-[0_0_auto] py-4 sm:py-6 w-full flex items-center justify-center z-10">
                <HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} />
             </div>
             <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4">
                <ChatPanel 
-                 messages={messages} 
-                 isSpeaking={hudState === HUDState.SPEAKING} 
+                 messages={chatLog} 
                  userRole={user.role} 
                  hudState={hudState}
                  isAudioLoading={isAudioLoading}

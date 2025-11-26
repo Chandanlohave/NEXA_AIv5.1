@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 
@@ -75,19 +76,30 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
+  const [initStatusText, setInitStatusText] = useState('TAP TO CONNECT');
 
   // Random glitch effect for header
   useEffect(() => {
-    const texts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_KEY', 'NEXA_PROTOCOL'];
-    let interval: any;
+    const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_KEY', 'NEXA_PROTOCOL'];
+    const statusTexts = ['CALIBRATING_NEURAL_NET...', 'SYNCING_CHRONO_DRIVES...', 'LINKING_SATELLITES...', 'AWAITING_CONNECTION...'];
+    let headerInterval: any;
+    let statusInterval: any;
+
     if (mode === 'INIT') {
-      interval = setInterval(() => {
-        setGlitchText(texts[Math.floor(Math.random() * texts.length)]);
+      headerInterval = setInterval(() => {
+        setGlitchText(headerTexts[Math.floor(Math.random() * headerTexts.length)]);
       }, 2000);
+      statusInterval = setInterval(() => {
+        setInitStatusText(statusTexts[Math.floor(Math.random() * statusTexts.length)]);
+      }, 2500);
     } else {
       setGlitchText('ACCESS_GATEWAY');
     }
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(headerInterval);
+      clearInterval(statusInterval);
+    };
   }, [mode]);
 
   // Handle Input Change
@@ -100,6 +112,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const initiateSystem = () => {
     setLoading(true);
+    setInitStatusText('CONNECTION_ESTABLISHED');
     setTimeout(() => {
       setLoading(false);
       setMode('USER');
@@ -224,7 +237,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                <div className="mt-8 text-center space-y-2">
                  <h1 className="text-4xl font-bold text-white tracking-widest">NEXA</h1>
                  <div className="text-nexa-cyan/60 text-xs font-mono tracking-[0.3em] group-hover:text-nexa-cyan transition-colors">
-                   {loading ? 'INITIALIZING...' : 'TAP TO CONNECT'}
+                   {loading ? 'INITIALIZING...' : initStatusText}
                  </div>
                </div>
             </div>
