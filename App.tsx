@@ -225,8 +225,27 @@ const App: React.FC = () => {
 
   const getAudioContext = () => {
     if (!audioContextRef.current) { audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(); }
-    if (audioContextRef.current.state === 'suspended') { audioContextRef.current.resume(); }
     return audioContextRef.current;
+  };
+
+  // --- AUDIO UNLOCKER FOR VERCEL/MOBILE ---
+  const unlockAudioContext = () => {
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        // Play a tiny silent buffer to force the browser to accept audio from this context
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+          console.log("Audio Context Unlocked");
+        } catch(e) {
+          console.warn("Audio unlock failed (harmless if already unlocked)", e);
+        }
+      });
+    }
   };
 
   // --- Global Pronunciation Fix ---
@@ -236,7 +255,7 @@ const App: React.FC = () => {
   };
 
   const handleMicClick = () => {
-    getAudioContext();
+    unlockAudioContext(); // Ensure audio is unlocked on interaction
     
     // Interrupt logic for THINKING or SPEAKING states
     if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING) {
@@ -258,7 +277,6 @@ const App: React.FC = () => {
 
     // Start/Stop logic for IDLE or LISTENING states
     if (hudState === HUDState.LISTENING) {
-        // CRITICAL FIX: Immediately set state to IDLE on user command
         setHudState(HUDState.IDLE); 
         if (recognitionRef.current) {
             recognitionRef.current.stop();
@@ -298,29 +316,45 @@ const App: React.FC = () => {
       const audioBuffer = await generateSpeech(spokenText);
       if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
-      // 2. Now that we have audio, update UI and play them together
+      // 2. PREPARE THE UI DATA, BUT DON'T SHOW YET
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
-      memoryRef.current.push(modelMessage);
-      saveMemory();
-      setMessages([modelMessage]); // This will trigger the typewriter
       
       executeIntents(displayText);
 
       if (audioBuffer) {
-        playAudio(audioBuffer);
+        // 3. TRY TO PLAY AUDIO. If it fails (autoplay block), fallback to text-only.
+        try {
+            playAudio(audioBuffer);
+            // Delay the text slightly to sync with the start of the audio output hardware
+            setTimeout(() => {
+                memoryRef.current.push(modelMessage);
+                saveMemory();
+                setMessages([modelMessage]);
+            }, 50);
+        } catch (audioError) {
+             console.error("Audio Playback Blocked", audioError);
+             // Fallback: Show text immediately and simulate speaking time
+             memoryRef.current.push(modelMessage);
+             saveMemory();
+             setMessages([modelMessage]);
+             setHudState(HUDState.SPEAKING);
+             setTimeout(() => {
+                 if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; }
+             }, displayText.length * 40 + 1000);
+        }
       } else {
-        // FALLBACK FOR NO AUDIO: Simulate speaking so typewriter works
-        // This fixes the "Instant Text / Idle" issue if audio fails or is blocked.
-        setHudState(HUDState.SPEAKING);
-        // Estimate reading time: 40ms per character + 1s buffer to match typewriter speed
-        const estimatedDuration = displayText.length * 40 + 1000;
+        // FALLBACK FOR NO AUDIO DATA
+        memoryRef.current.push(modelMessage);
+        saveMemory();
+        setMessages([modelMessage]);
         
+        setHudState(HUDState.SPEAKING);
         setTimeout(() => {
              if(isProcessingRef.current) {
                 setHudState(HUDState.IDLE);
                 isProcessingRef.current = false;
              }
-        }, estimatedDuration);
+        }, displayText.length * 40 + 1000);
       }
     } catch(e) {
       console.error("Speak System Message Error:", e);
@@ -331,8 +365,12 @@ const App: React.FC = () => {
 
   const playAudio = (buffer: ArrayBuffer) => {
       if (!isProcessingRef.current) return;
-      setHudState(HUDState.SPEAKING);
+      
       const ctx = getAudioContext();
+      // Ensure context is running. If not, try to resume (last ditch effort)
+      if (ctx.state === 'suspended') { ctx.resume(); }
+
+      setHudState(HUDState.SPEAKING);
       const decodedBuffer = pcmToAudioBuffer(buffer, ctx);
       const source = ctx.createBufferSource();
       source.buffer = decodedBuffer;
@@ -355,38 +393,48 @@ const App: React.FC = () => {
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     memoryRef.current.push(userMessage);
     saveMemory();
-    setMessages([userMessage]); // Show user message immediately for responsiveness
+    setMessages([userMessage]); 
 
     try {
-        // 1. Get text response from AI
         const rawAiResponse = await generateTextResponse(text, user, memoryRef.current.map(m => ({ role: m.role, parts: [{ text: m.text }] })));
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
-        // 2. Get audio response from AI
         const spokenAiResponse = applyPronunciationFix(rawAiResponse);
         const audioBuffer = await generateSpeech(spokenAiResponse);
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
-        // 3. SYNCHRONIZATION POINT: Now we have both, update UI and play audio
         const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
-        memoryRef.current.push(modelMessage);
-        saveMemory();
-        setMessages([userMessage, modelMessage]); // This will trigger the typewriter
-        
         executeIntents(rawAiResponse);
 
         if (audioBuffer) {
-            playAudio(audioBuffer);
+             try {
+                playAudio(audioBuffer);
+                setTimeout(() => {
+                    memoryRef.current.push(modelMessage);
+                    saveMemory();
+                    setMessages([userMessage, modelMessage]); 
+                }, 50);
+            } catch (audioError) {
+                console.error("Audio Playback Blocked", audioError);
+                memoryRef.current.push(modelMessage);
+                saveMemory();
+                setMessages([userMessage, modelMessage]);
+                setHudState(HUDState.SPEAKING);
+                setTimeout(() => {
+                    if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; }
+                }, rawAiResponse.length * 40 + 1000);
+            }
         } else {
-             // FALLBACK FOR NO AUDIO (Same logic as speakSystemMessage)
+             memoryRef.current.push(modelMessage);
+             saveMemory();
+             setMessages([userMessage, modelMessage]);
              setHudState(HUDState.SPEAKING);
-             const estimatedDuration = rawAiResponse.length * 40 + 1000;
              setTimeout(() => {
                  if(isProcessingRef.current) {
                    setHudState(HUDState.IDLE);
                    isProcessingRef.current = false;
                  }
-             }, estimatedDuration);
+             }, rawAiResponse.length * 40 + 1000);
         }
     } catch (e) {
         console.error("Process Query Error", e);
@@ -398,12 +446,12 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (profile: UserProfile) => {
+    // VERCEL/MOBILE FIX: UNLOCK AUDIO IMMEDIATELY ON USER CLICK
+    unlockAudioContext();
+
     setUser(profile);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     loadMemory(profile.mobile);
-    
-    // VERCEL AUTOPLAY FIX: Unlock audio context on the first user gesture (login)
-    getAudioContext();
     
     setTimeout(() => {
       const hour = new Date().getHours();
