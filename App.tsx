@@ -95,7 +95,7 @@ const pcmToAudioBuffer = (pcmData: ArrayBuffer, context: AudioContext): AudioBuf
 // --- MAIN APP ---
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [chatLog, setChatLog] = useState<ChatMessage[]>([]); // Full visible chat history
+  const [chatLog, setChatLog] = useState<ChatMessage[]>([]);
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
@@ -106,8 +106,35 @@ const App: React.FC = () => {
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const isProcessingRef = useRef(false);
-  const memoryRef = useRef<ChatMessage[]>([]); // Full conversation history for AI memory
+  const memoryRef = useRef<ChatMessage[]>([]);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  const displaySystemError = (error: any, context: string) => {
+    console.error(`Error in ${context}:`, error);
+    let errorMessageText = 'Connection interrupted. Please try again.';
+    const errorMessageString = error.toString();
+
+    if (errorMessageString.includes('API_KEY_MISSING')) {
+        errorMessageText = 'SYSTEM ERROR: API Key is not configured. Please contact the administrator.';
+    } else if (errorMessageString.includes('404')) {
+        errorMessageText = 'SYSTEM ERROR: The requested AI model was not found. The configuration may be incorrect.';
+    } else if (errorMessageString.includes('400')) {
+        errorMessageText = 'SYSTEM ERROR: Invalid request sent to AI. Please check your input or contact support.';
+    } else if (errorMessageString.toLowerCase().includes('failed to fetch')) {
+        errorMessageText = 'NETWORK ERROR: Cannot connect to NEXA systems. Please check your internet connection.';
+    }
+
+    const errorMessage: ChatMessage = { role: 'model', text: errorMessageText, timestamp: Date.now() };
+    setChatLog(prev => [...prev, errorMessage]);
+    
+    // Do not save system errors to long-term memory
+    // memoryRef.current.push(errorMessage);
+    // saveMemory(user);
+
+    setHudState(HUDState.IDLE);
+    isProcessingRef.current = false;
+    setIsAudioLoading(false);
+  };
 
 
   useEffect(() => {
@@ -121,10 +148,7 @@ const App: React.FC = () => {
     if (savedConfig) { 
         try {
             const parsedConfig = JSON.parse(savedConfig);
-            // Ensure ambientSoundEnabled is not carried over from old configs
-            if ('ambientSoundEnabled' in parsedConfig) {
-                delete parsedConfig.ambientSoundEnabled;
-            }
+            if ('ambientSoundEnabled' in parsedConfig) { delete parsedConfig.ambientSoundEnabled; }
             setConfig(parsedConfig); 
         } catch (e) {
             console.error("Failed to parse config, resetting.", e);
@@ -167,64 +191,37 @@ const App: React.FC = () => {
   const initSpeechRecognition = () => {
       if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const SpeechGrammarList = (window as any).SpeechGrammarList || (window as any).webkitGrammarList;
-      
-      const recognition = new SpeechRecognition();
-      
-      if (SpeechGrammarList) {
-          const speechRecognitionList = new SpeechGrammarList();
-          const grammar = '#JSGF V1.0; grammar nexa_names; public <name> = Nexa | Chandan ;';
-          speechRecognitionList.addFromString(grammar, 1);
-          recognition.grammars = speechRecognitionList;
-      }
-
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-IN';
-
-      recognition.onstart = () => { setHudState(HUDState.LISTENING); };
-      recognition.onend = () => { if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); };
-      recognition.onerror = (event: any) => {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-IN';
+      recognitionRef.current.onstart = () => setHudState(HUDState.LISTENING);
+      recognitionRef.current.onend = () => { if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); };
+      recognitionRef.current.onerror = (event: any) => {
         console.error("Speech Error", event.error);
-        if (event.error === 'aborted' || event.error === 'no-speech') { return; }
+        if (event.error === 'aborted' || event.error === 'no-speech') return;
         setHudState(HUDState.IDLE);
       };
-      recognition.onresult = (event: any) => { 
-          const transcript = event.results[0][0].transcript;
-          processQuery(transcript); 
-      };
-      return recognition;
+      recognitionRef.current.onresult = (event: any) => { processQuery(event.results[0][0].transcript); };
     }
-    return null;
   };
 
-  useEffect(() => {
-    recognitionRef.current = initSpeechRecognition();
-  }, [user]);
+  useEffect(() => { initSpeechRecognition(); }, []);
 
   const loadMemory = (mobile: string) => {
     const history = localStorage.getItem(`nexa_chat_${mobile}`);
     if (history) { 
-      try {
-        const parsedHistory = JSON.parse(history);
-        memoryRef.current = parsedHistory; 
-      } catch (e) {
-        console.error("Failed to parse chat history from localStorage", e);
-        memoryRef.current = [];
-      }
-    } else {
-      memoryRef.current = [];
-    }
+      try { memoryRef.current = JSON.parse(history); } 
+      catch (e) { console.error("Failed to parse chat history", e); memoryRef.current = []; }
+    } else { memoryRef.current = []; }
   };
 
   const saveMemory = (currentUser: UserProfile | null) => {
-    if (currentUser) {
-      localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current));
-    }
+    if (currentUser) localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current));
   };
 
   const getAudioContext = () => {
-    if (!audioContextRef.current) { audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(); }
+    if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     return audioContextRef.current;
   };
 
@@ -233,9 +230,8 @@ const App: React.FC = () => {
     if (ctx.state === 'suspended') {
       ctx.resume().then(() => {
         try {
-          const buffer = ctx.createBuffer(1, 1, 22050);
           const source = ctx.createBufferSource();
-          source.buffer = buffer;
+          source.buffer = ctx.createBuffer(1, 1, 22050);
           source.connect(ctx.destination);
           source.start(0);
         } catch(e) { console.warn("Audio unlock failed", e); }
@@ -243,41 +239,26 @@ const App: React.FC = () => {
     }
   };
 
-  const applyPronunciationFix = (text: string): string => {
-    return text.replace(/Lohave/gi, 'लोहवे');
-  };
+  const applyPronunciationFix = (text: string): string => text.replace(/Lohave/gi, 'लोहवे');
 
   const handleMicClick = () => {
     unlockAudioContext();
-    
     if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) {
-        isProcessingRef.current = false; // Stop any further processing
-        if (recognitionRef.current) recognitionRef.current.abort();
-
+        isProcessingRef.current = false;
+        recognitionRef.current?.abort();
         if (currentAudioSourceRef.current) {
-            currentAudioSourceRef.current.onended = null; // Prevent onended from firing
+            currentAudioSourceRef.current.onended = null;
             currentAudioSourceRef.current.stop();
             currentAudioSourceRef.current = null;
         }
-        
-        setHudState(HUDState.IDLE); // Immediately reset state
+        setHudState(HUDState.IDLE);
         return;
     }
-
     if (hudState === HUDState.LISTENING) {
-        setHudState(HUDState.IDLE); 
-        if (recognitionRef.current) { recognitionRef.current.stop(); }
+        recognitionRef.current?.stop();
     } else {
-        if (!recognitionRef.current) { recognitionRef.current = initSpeechRecognition(); }
-        try {
-            recognitionRef.current?.start();
-        } catch (e) {
-            console.warn("Recognition start error, resetting...", e);
-            recognitionRef.current?.stop();
-            setTimeout(() => {
-                try { recognitionRef.current?.start(); } catch(err) { console.error("Retry failed", err); }
-            }, 100);
-        }
+        try { recognitionRef.current?.start(); } 
+        catch (e) { console.warn("Recognition start error, re-initializing...", e); initSpeechRecognition(); setTimeout(() => recognitionRef.current?.start(), 100); }
     }
   };
 
@@ -285,10 +266,9 @@ const App: React.FC = () => {
      const intentRegex = /\[\[(WHATSAPP|CALL|OPEN):(.*?)\]\]/g;
      let match;
      while ((match = intentRegex.exec(text)) !== null) {
-        const command = match[1].toUpperCase();
-        const data = match[2];
-        if (command === 'WHATSAPP') { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(data)}`, '_blank'); } 
-        else if (command === 'CALL') { window.location.href = `tel:${data}`; } 
+        const command = match[1].toUpperCase(); const data = match[2];
+        if (command === 'WHATSAPP') window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(data)}`, '_blank');
+        else if (command === 'CALL') window.location.href = `tel:${data}`;
         else if (command === 'OPEN') {
            const appMap: {[key:string]: string} = { 'YOUTUBE': 'https://www.youtube.com', 'INSTAGRAM': 'https://www.instagram.com' };
            if (appMap[data.toUpperCase()]) window.open(appMap[data.toUpperCase()], '_blank');
@@ -298,33 +278,21 @@ const App: React.FC = () => {
 
   const playAudio = (buffer: ArrayBuffer, currentState: HUDState) => {
       if (!isProcessingRef.current) return;
-      
       const ctx = getAudioContext();
-      if (ctx.state === 'suspended') { ctx.resume(); }
-
-      if (currentState !== HUDState.ANGRY) {
-        setHudState(HUDState.SPEAKING);
-      }
+      if (ctx.state === 'suspended') ctx.resume();
+      if (currentState !== HUDState.ANGRY) setHudState(HUDState.SPEAKING);
       
       try {
-          const decodedBuffer = pcmToAudioBuffer(buffer, ctx);
           const source = ctx.createBufferSource();
-          source.buffer = decodedBuffer;
+          source.buffer = pcmToAudioBuffer(buffer, ctx);
           source.connect(ctx.destination);
           currentAudioSourceRef.current = source;
-          
           source.onended = () => { 
             currentAudioSourceRef.current = null;
-            // Only reset state if processing wasn't interrupted by user
-            if(isProcessingRef.current) {
-              setHudState(HUDState.IDLE); 
-              isProcessingRef.current = false; 
-            }
+            if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; }
           };
           source.start();
-      } catch (e) {
-          throw e;
-      }
+      } catch (e) { throw e; }
   };
 
   const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => {
@@ -333,165 +301,87 @@ const App: React.FC = () => {
     isProcessingRef.current = true;
     
     const textForDisplayAndMemory = displayText.replace(/लोहवे/g, 'Lohave');
-    const spokenText = applyPronunciationFix(textForDisplayAndMemory);
     const modelMessage: ChatMessage = { role: 'model', text: textForDisplayAndMemory, timestamp: Date.now() };
-
     memoryRef.current.push(modelMessage);
     saveMemory(currentUser);
     setIsAudioLoading(true);
 
     try {
-      const audioBuffer = await generateSpeech(spokenText, currentUser.role);
+      const audioBuffer = await generateSpeech(applyPronunciationFix(textForDisplayAndMemory), currentUser.role);
       setIsAudioLoading(false);
       if (!isProcessingRef.current) return;
-
       if (audioBuffer) {
-        try {
-          setChatLog(prev => [...prev, modelMessage]);
-          playAudio(audioBuffer, HUDState.THINKING);
-        } catch (audioError) {
-          console.error("Audio Playback Blocked.", audioError);
-          setHudState(HUDState.IDLE);
-          isProcessingRef.current = false;
-        }
-      } else {
-        console.log("Audio generation failed for system message.");
         setChatLog(prev => [...prev, modelMessage]);
-        setHudState(HUDState.IDLE);
-        isProcessingRef.current = false;
+        playAudio(audioBuffer, HUDState.THINKING);
+      } else {
+        setChatLog(prev => [...prev, modelMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false;
       }
     } catch(e) {
-      setIsAudioLoading(false);
-      console.error("Speak System Message Error:", e);
-      setChatLog(prev => [...prev, modelMessage]);
-      setHudState(HUDState.IDLE);
-      isProcessingRef.current = false;
+        displaySystemError(e, "Speak System Message");
     }
   };
 
   const handleAdminNotifications = (responseText: string, currentUser: UserProfile | null): string => {
-      if (currentUser?.role !== UserRole.USER) {
-          return responseText; // Only log notifications from standard users
-      }
-
+      if (currentUser?.role !== UserRole.USER) return responseText;
       const adminNotifyRegex = /\[\[ADMIN_NOTIFY:(.*?)\]\]/g;
       return responseText.replace(adminNotifyRegex, (match, message) => {
           try {
-              const notificationsJSON = localStorage.getItem('nexa_admin_notifications');
-              let notifications = notificationsJSON ? JSON.parse(notificationsJSON) : [];
-              const timestamp = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute:'2-digit' });
-              notifications.push(message.trim()); // The message is now pure Hinglish
+              let notifications = JSON.parse(localStorage.getItem('nexa_admin_notifications') || '[]');
+              notifications.push(message.trim());
               localStorage.setItem('nexa_admin_notifications', JSON.stringify(notifications));
-          } catch(e) {
-              console.error("Failed to save admin notification:", e);
-          }
-          return ''; // Strip tag from the response that user sees
+          } catch(e) { console.error("Failed to save admin notification:", e); }
+          return '';
       });
   };
 
   const processQuery = async (text: string) => {
     if (!user || isProcessingRef.current) return;
-
-    // --- MEMORY PROTECTION PROTOCOL ---
-    // Detect if the query is about development/code to prevent it from being saved to NEXA's persona memory.
     const devKeywords = ['code', 'change', 'fix', 'update', 'file', 'component', 'kya change kiya', 'error', 'bug', 'debug', 'system', 'backend'];
     const isDevQuery = user.role === UserRole.ADMIN && devKeywords.some(keyword => text.toLowerCase().includes(keyword));
-    // --- END MEMORY PROTECTION ---
     
     setHudState(HUDState.THINKING);
     isProcessingRef.current = true;
     
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
-    
-    if (!isDevQuery) {
-        memoryRef.current.push(userMessage);
-        saveMemory(user);
-    }
+    if (!isDevQuery) { memoryRef.current.push(userMessage); saveMemory(user); }
     setChatLog(prev => [...prev, userMessage]); 
 
     try {
         const startTime = performance.now();
-        
-        const MAX_HISTORY_MESSAGES = 10;
-        const recentHistory = memoryRef.current.slice(0, -1);
-        const historyForApi = recentHistory.slice(-MAX_HISTORY_MESSAGES).map((msg: ChatMessage) => ({
-            role: msg.role, parts: [{ text: msg.text }],
-        }));
-        
+        const historyForApi = memoryRef.current.slice(0, -1).slice(-10).map((msg: ChatMessage) => ({ role: msg.role, parts: [{ text: msg.text }] }));
         const rawAiResponse = await generateTextResponse(text, user, historyForApi);
-        const endTime = performance.now();
-        setLatency(Math.round(endTime - startTime));
+        setLatency(Math.round(performance.now() - startTime));
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
         
-        let responseAfterNotificationCheck = handleAdminNotifications(rawAiResponse, user);
-        
-        const stateMatch = responseAfterNotificationCheck.match(/\[\[STATE:(.*?)\]\]/);
+        let responseAfterNotification = handleAdminNotifications(rawAiResponse, user);
+        const stateMatch = responseAfterNotification.match(/\[\[STATE:(.*?)\]\]/);
         const nextState = stateMatch ? stateMatch[1] : null;
-        if(stateMatch) {
-            responseAfterNotificationCheck = responseAfterNotificationCheck.replace(/\[\[STATE:.*?\]\]/g, '');
-        }
+        if(stateMatch) responseAfterNotification = responseAfterNotification.replace(/\[\[STATE:.*?\]\]/g, '');
 
-        if (nextState === 'ANGRY') {
-            setHudState(HUDState.ANGRY);
-            if (navigator.vibrate) {
-              navigator.vibrate([100, 50, 100]); // Haptic feedback
-            }
-        }
+        if (nextState === 'ANGRY') { setHudState(HUDState.ANGRY); navigator.vibrate?.([100, 50, 100]); }
         
-        executeIntents(responseAfterNotificationCheck);
+        executeIntents(responseAfterNotification);
 
-        const textForDisplayAndMemory = responseAfterNotificationCheck
-            .replace(/\[\[.*?\]\]/g, '')
-            .trim()
-            .replace(/लोहवे/g, 'Lohave');
-        
-        const spokenAiResponse = applyPronunciationFix(textForDisplayAndMemory);
-        
-        const modelMessage: ChatMessage = { 
-            role: 'model', 
-            text: textForDisplayAndMemory, 
-            timestamp: Date.now(),
-            isAngry: nextState === 'ANGRY' 
-        };
-
-        if (!isDevQuery) {
-            memoryRef.current.push(modelMessage);
-            saveMemory(user);
-        }
+        const textForDisplay = responseAfterNotification.replace(/\[\[.*?\]\]/g, '').trim().replace(/लोहवे/g, 'Lohave');
+        const modelMessage: ChatMessage = { role: 'model', text: textForDisplay, timestamp: Date.now(), isAngry: nextState === 'ANGRY' };
+        if (!isDevQuery) { memoryRef.current.push(modelMessage); saveMemory(user); }
 
         setIsAudioLoading(true);
-        const audioBuffer = await generateSpeech(spokenAiResponse, user.role, nextState === 'ANGRY');
+        const audioBuffer = await generateSpeech(applyPronunciationFix(textForDisplay), user.role, nextState === 'ANGRY');
         setIsAudioLoading(false);
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
-
         if (audioBuffer) {
-             try {
-                setChatLog(prev => [...prev, modelMessage]);
-                playAudio(audioBuffer, nextState === 'ANGRY' ? HUDState.ANGRY : hudState);
-             } catch (audioError) {
-                console.error("Audio Playback Blocked.", audioError);
-                setHudState(HUDState.IDLE);
-                isProcessingRef.current = false;
-             }
+             setChatLog(prev => [...prev, modelMessage]);
+             playAudio(audioBuffer, nextState === 'ANGRY' ? HUDState.ANGRY : hudState);
         } else {
-             console.log("Audio generation failed.");
              setChatLog(prev => [...prev, modelMessage]);
              setHudState(HUDState.IDLE);
              isProcessingRef.current = false;
         }
     } catch (e) {
-        setIsAudioLoading(false);
-        console.error("Process Query Error", e);
-        const errorMessage: ChatMessage = { role: 'model', text: 'Connection interrupted. Please try again.', timestamp: Date.now() };
-        setChatLog(prev => [...prev, errorMessage]);
-        if (!isDevQuery) {
-            memoryRef.current.push(errorMessage);
-            saveMemory(user);
-        }
-        setHudState(HUDState.IDLE);
-        isProcessingRef.current = false;
+        displaySystemError(e, "Process Query");
     }
   };
 
@@ -500,7 +390,6 @@ const App: React.FC = () => {
     setUser(profile);
     setHudState(HUDState.THINKING);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
-    
     loadMemory(profile.mobile);
     setChatLog([]); 
   
@@ -515,77 +404,34 @@ const App: React.FC = () => {
             try {
               const notifications: string[] = JSON.parse(notificationsJSON);
               if (notifications.length > 0) {
-                const nameRegex = /user '(.*?)'/;
-                const names = notifications
-                  .map(n => n.match(nameRegex)?.[1])
-                  .filter((name): name is string => !!name);
-
+                const names = notifications.map(n => n.match(/user '(.*?)'/)?.[1]).filter(Boolean as any as (x: string | undefined) => x is string);
                 if (names.length > 0) {
-                  let nameSummary = '';
-                  if (names.length === 1) {
-                    nameSummary = names[0];
-                  } else if (names.length === 2) {
-                    nameSummary = `${names[0]} aur ${names[1]}`;
-                  } else {
-                    nameSummary = `${names.slice(0, -1).join(', ')}, aur ${names[names.length - 1]}`;
-                  }
-                  
-                  const verb = names.length > 1 ? 'rahe the' : 'rahe the'; // Works for respectful singular and plural
-                  notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch ${verb}. Aap chinta mat kijiye, maine sab aache se sambhal liya hai.`;
+                  let nameSummary = names.length === 1 ? names[0] : (names.length === 2 ? `${names[0]} aur ${names[1]}` : `${names.slice(0, -1).join(', ')}, aur ${names[names.length - 1]}`);
+                  notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch rahe the. Aap chinta mat kijiye, maine sab aache se sambhal liya hai.`;
                 }
                 localStorage.removeItem('nexa_admin_notifications');
               }
-            } catch(e) { 
-              console.error("Failed to parse admin notifications", e);
-              localStorage.removeItem('nexa_admin_notifications'); // Clear corrupted data
-            }
+            } catch(e) { localStorage.removeItem('nexa_admin_notifications'); }
           }
         }
 
-        if (notificationPrefix) {
-          speakSystemMessage(notificationPrefix, profile);
-          return;
-        }
-
+        if (notificationPrefix) { speakSystemMessage(notificationPrefix, profile); return; }
         if (shouldSpeakIntro) {
           const dynamicIntro = await generateIntroductoryMessage(profile);
           speakSystemMessage(dynamicIntro, profile);
-        } else {
-          setHudState(HUDState.IDLE);
-        }
+        } else { setHudState(HUDState.IDLE); }
 
       } catch (e) {
-        console.error("Failed to generate login message:", e);
-        if (shouldSpeakIntro) {
-          const fallbackMessage = `Welcome back, ${profile.name}. NEXA system is online.`;
-          speakSystemMessage(fallbackMessage, profile);
-        } else {
-           setHudState(HUDState.IDLE);
-        }
+        displaySystemError(e, "Login Intro");
       }
     };
     
     setTimeout(getAndSpeakIntro, 500);
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('nexa_user');
-    setChatLog([]);
-    memoryRef.current = [];
-    setHudState(HUDState.IDLE);
-  };
-
+  const handleLogout = () => { setUser(null); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); };
   const handleInstall = () => { if (installPrompt) { installPrompt.prompt(); setInstallPrompt(null); } };
-
-  const handleClearMemory = () => {
-    const currentUser = user;
-    setChatLog([]);
-    memoryRef.current = [];
-    if (currentUser) {
-      localStorage.removeItem(`nexa_chat_${currentUser.mobile}`);
-    }
-  };
+  const handleClearMemory = () => { setChatLog([]); memoryRef.current = []; if (user) localStorage.removeItem(`nexa_chat_${user.mobile}`); };
 
   return (
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-nexa-cyan selection:text-black">
@@ -599,12 +445,7 @@ const App: React.FC = () => {
                <HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} />
             </div>
             <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4">
-               <ChatPanel 
-                 messages={chatLog} 
-                 userRole={user.role} 
-                 hudState={hudState}
-                 isAudioLoading={isAudioLoading}
-               />
+               <ChatPanel messages={chatLog} userRole={user.role} hudState={hudState} isAudioLoading={isAudioLoading} />
             </div>
           </div>
           <ControlDeck onMicClick={handleMicClick} hudState={hudState} />
