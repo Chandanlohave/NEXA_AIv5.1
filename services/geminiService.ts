@@ -45,7 +45,7 @@ export const generateTextResponse = async (
     **MEMORY & RESPONSE BEHAVIOR:**
     - Your internal memory contains the full conversation history. Use this context.
     - Purane topics ka reference dekar baat karegi to provide personalized responses.
-    - Example: If user mentioned liking a song yesterday, you can say "Kal aapko woh song pasand aaya tha, right?".
+    - Keep responses CONCISE and FAST. Avoid long lectures unless asked.
 
     **SPECIAL DIRECTIVES:**
     1. **Sound Effects:** Jab user conversation start kare (i.e., this is the first user message after a system message), start your response with: [SFX: Sci-fi interface beep hum]
@@ -90,9 +90,9 @@ export const generateTextResponse = async (
     `;
   }
 
-  const isComplexQuery = /analyze|explain|reason|plan|code|solve|derive|complex|why|how|detail|think/i.test(input) || input.length > 80;
+  // --- MODEL SELECTION LOGIC (OPTIMIZED FOR SPEED) ---
+  // Default to Flash (Fastest). Only use Pro (Thinking) if explicitly requested via "think:" prefix.
   const adminOverride = input.toLowerCase().startsWith("think:");
-  const shouldThink = isComplexQuery || adminOverride;
   const cleanInput = input.replace(/^think:\s*/i, '');
 
   let modelName = 'gemini-2.5-flash'; 
@@ -108,9 +108,9 @@ export const generateTextResponse = async (
     ]
   };
 
-  if (shouldThink) {
+  if (adminOverride) {
     modelName = 'gemini-3-pro-preview';
-    config.thinkingConfig = { thinkingBudget: 32768 };
+    config.thinkingConfig = { thinkingBudget: 16384 }; // Reduced budget for slightly faster thinking
   }
 
   const response = await ai.models.generateContent({

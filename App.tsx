@@ -394,7 +394,15 @@ const App: React.FC = () => {
     try {
       // 1. Generate audio first
       const spokenText = applyPronunciationFix(displayText);
-      const audioBuffer = await generateSpeech(spokenText);
+      
+      // OPTIMIZATION: ADD TIMEOUT TO TTS GENERATION
+      // If network is slow (taking > 8 seconds), fallback to native voice immediately.
+      const audioPromise = generateSpeech(spokenText);
+      const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
+        setTimeout(() => resolve(null), 8000)
+      );
+      
+      const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
       
       // Check for processing interruption
       if (!isProcessingRef.current) return;
@@ -422,7 +430,7 @@ const App: React.FC = () => {
              speakNative(displayText); // FALLBACK
         }
       } else {
-        // FALLBACK TO NATIVE VOICE IF GEMINI API FAILS (Null buffer)
+        // FALLBACK TO NATIVE VOICE IF GEMINI API FAILS OR TIMEOUT
         memoryRef.current.push(modelMessage);
         saveMemory();
         setMessages([modelMessage]);
@@ -479,7 +487,15 @@ const App: React.FC = () => {
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
         const spokenAiResponse = applyPronunciationFix(rawAiResponse);
-        const audioBuffer = await generateSpeech(spokenAiResponse);
+        
+        // OPTIMIZATION: ADD TIMEOUT TO TTS GENERATION
+        const audioPromise = generateSpeech(spokenAiResponse);
+        const timeoutPromise = new Promise<ArrayBuffer | null>((resolve) => 
+            setTimeout(() => resolve(null), 8000)
+        );
+        
+        const audioBuffer = await Promise.race([audioPromise, timeoutPromise]);
+        
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
         const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
@@ -502,7 +518,7 @@ const App: React.FC = () => {
                 speakNative(rawAiResponse); // FALLBACK
             }
         } else {
-             // FALLBACK TO NATIVE VOICE (e.g. if API Key invalid or Quota exceeded)
+             // FALLBACK TO NATIVE VOICE (Timeout or API Fail)
              memoryRef.current.push(modelMessage);
              saveMemory();
              setMessages([userMessage, modelMessage]);
