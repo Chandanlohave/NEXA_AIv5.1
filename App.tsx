@@ -324,11 +324,24 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (profile: UserProfile) => {
-    setUser(profile);
-    localStorage.setItem('nexa_user', JSON.stringify(profile));
-    loadMemory(profile.mobile);
-    setTimeout(() => { speakSystemMessage("[SFX: Connection established] System online! Aapka connection secure hai."); }, 500);
-  };
+  setUser(profile);
+  localStorage.setItem('nexa_user', JSON.stringify(profile));
+  loadMemory(profile.mobile);
+  
+  // NEW CODE - DIRECT NEXA INTRO
+  setTimeout(() => {
+    const hour = new Date().getHours();
+    let greeting = 'Good morning';
+    if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
+    else if (hour >= 18) greeting = 'Good evening';
+    
+    const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
+    
+    const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\n${greeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${userName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`;
+    
+    speakSystemMessage(introMessage);
+  }, 500);
+};
 
   const handleLogout = () => {
     setUser(null);
