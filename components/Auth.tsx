@@ -356,7 +356,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       </div>
 
       {/* --- FOOTER --- */}
-      <div className="absolute bottom-12 text-center text-[8px] font-mono text-nexa-cyan/30 tracking-widest animate-fade-in z-50">
+      <div className="absolute bottom-16 text-center text-[8px] font-mono text-nexa-cyan/30 tracking-widest animate-fade-in z-50">
         © 2025 CHANDAN LOHAVE. ALL RIGHTS RESERVED.
       </div>
 

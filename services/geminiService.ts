@@ -2,9 +2,20 @@ import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold } from "@google
 import { UserProfile, UserRole } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Priority 1: Vercel/environment variable (prefixed for client-side access)
+  let apiKey = process.env.NEXT_PUBLIC_API_KEY;
+
+  // Priority 2: Local storage (for admin setup)
   if (!apiKey) {
-    // Use a specific error message that can be checked by the UI layer.
+    try {
+      apiKey = localStorage.getItem('nexa_api_key');
+    } catch (e) {
+      console.error("Could not access localStorage for API key.", e);
+    }
+  }
+  
+  if (!apiKey) {
+    // If still no key, throw the error.
     throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
