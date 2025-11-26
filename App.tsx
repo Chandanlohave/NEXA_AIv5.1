@@ -154,8 +154,54 @@ const App: React.FC = () => {
   const handleLogout = () => { setUser(null); setSystemStatus('unauthenticated'); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); setPendingIntro(null); };
   
   const playAudio = (buffer: ArrayBuffer, currentState: HUDState) => { if (!isProcessingRef.current) return; const ctx = getAudioContext(); if (ctx.state === 'suspended') ctx.resume(); if (currentState !== HUDState.ANGRY) setHudState(HUDState.SPEAKING); try { const source = ctx.createBufferSource(); source.buffer = pcmToAudioBuffer(buffer, ctx); source.connect(ctx.destination); currentAudioSourceRef.current = source; source.onended = () => { currentAudioSourceRef.current = null; if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; } }; source.start(); } catch (e) { throw e; } };
-  const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => { if (isProcessingRef.current || !currentUser) return; if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); setHudState(HUDState.THINKING); isProcessingRef.current = true; const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() }; memoryRef.current.push(modelMessage); saveMemory(currentUser); setIsAudioLoading(true); try { const audioBuffer = await generateSpeech(displayText.replace(/Lohave/gi, 'लोहवे'), currentUser.role); setIsAudioLoading(false); if (!isProcessingRef.current) return; if (audioBuffer) { setChatLog(prev => [...prev, modelMessage]); playAudio(audioBuffer, HUDState.THINKING); } else { setChatLog(prev => [...prev, modelMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false; } } catch(e) { handleApiError(e, "Speak System Message"); } };
   
+  const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => {
+    if (isProcessingRef.current || !currentUser) return;
+    if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current);
+    setHudState(HUDState.THINKING);
+    isProcessingRef.current = true;
+    setIsAudioLoading(true);
+
+    try {
+      const audioBuffer = await generateSpeech(displayText.replace(/Lohave/gi, 'लोहवे'), currentUser.role);
+      setIsAudioLoading(false);
+
+      const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
+      memoryRef.current.push(modelMessage);
+      saveMemory(currentUser);
+      setChatLog(prev => [...prev, modelMessage]);
+
+      if (!isProcessingRef.current) return;
+
+      if (audioBuffer) {
+        playAudio(audioBuffer, HUDState.THINKING);
+      } else {
+        setHudState(HUDState.IDLE);
+        isProcessingRef.current = false;
+      }
+    } catch (e) {
+      console.error("TTS failed for system message, falling back to text-only:", e);
+      setIsAudioLoading(false);
+  
+      const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
+      memoryRef.current.push(modelMessage);
+      saveMemory(currentUser);
+      setChatLog(prev => [...prev, modelMessage]);
+      
+      const audioFailMessage: ChatMessage = { 
+        role: 'model', 
+        text: `// Audio synthesis failed. Your API key might lack permissions for the Text-to-Speech model.`, 
+        timestamp: Date.now() + 1 
+      };
+      memoryRef.current.push(audioFailMessage);
+      saveMemory(currentUser);
+      setChatLog(prev => [...prev, audioFailMessage]);
+      
+      setHudState(HUDState.IDLE);
+      isProcessingRef.current = false;
+    }
+  };
+
   const handleMicClick = () => {
     unlockAudioContext();
 
@@ -197,7 +243,30 @@ const App: React.FC = () => {
     }
   };
 
-  const handleApiError = (error: any, context: string) => { console.error(`Error in ${context}:`, error); const errorMessage: ChatMessage = { role: 'model', text: `SYSTEM ERROR: Connection interrupted. Please check logs. [${context}]`, timestamp: Date.now() }; setChatLog(prev => [...prev, errorMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false; setIsAudioLoading(false); };
+  const handleApiError = (error: any, context: string) => {
+    console.error(`Error in ${context}:`, error);
+    
+    let detailedMessage = "Connection interrupted. Please check the browser console for details.";
+    if (error && error.message) {
+      if (error.message.includes("API key not valid")) {
+          detailedMessage = "The API Key is invalid or has been revoked.";
+      } else if (error.message.includes("billing")) {
+          detailedMessage = "The project's billing is not enabled, which is required for this model.";
+      } else if (error.message.includes("permission denied")) {
+          detailedMessage = "The API Key lacks permission for the requested model.";
+      } else if (error.message.includes("404")) {
+          detailedMessage = "The requested model was not found (404).";
+      } else {
+          detailedMessage = error.message.length > 150 ? error.message.substring(0, 150) + '...' : error.message;
+      }
+    }
+    
+    const errorMessage: ChatMessage = { role: 'model', text: `SYSTEM ERROR: ${detailedMessage} [Context: ${context}]`, timestamp: Date.now() };
+    setChatLog(prev => [...prev, errorMessage]);
+    setHudState(HUDState.IDLE);
+    isProcessingRef.current = false;
+    setIsAudioLoading(false);
+  };
   
   const processQuery = async (text: string) => {
     if (!user || isProcessingRef.current) return;
