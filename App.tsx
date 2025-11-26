@@ -60,14 +60,15 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [config, setConfig] = useState<AppConfig>({ introText: "", animationsEnabled: true, hudRotationSpeed: 1 });
   const [latency, setLatency] = useState<number | null>(null);
+  const [pendingIntro, setPendingIntro] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const isProcessingRef = useRef(false);
   const memoryRef = useRef<ChatMessage[]>([]);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const listeningTimeoutRef = useRef<number | null>(null);
   
-  // On initial mount, check for saved user and set up listeners
   useEffect(() => {
     const savedUser = localStorage.getItem('nexa_user');
     if (savedUser) { handleLogin(JSON.parse(savedUser)); }
@@ -87,7 +88,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('nexa_config', JSON.stringify(config)); }, [config]);
   useEffect(() => { if (!user || user.role !== UserRole.ADMIN) return; const checkTime = () => { const now = new Date(); if (now.getHours() === 23 && now.getMinutes() === 0) { speakSystemMessage("Sir… 11 baj chuke hain. Kal aapko Encave Cafe duty bhi karni hai. Please rest kar lijiye… main yahin hoon.", user); } if (now.getHours() === 8 && now.getMinutes() === 0) { speakSystemMessage("Sir… aaj Encave Café duty hai, time se tayar ho jaiye.", user); } }; const interval = setInterval(checkTime, 60000); return () => clearInterval(interval); }, [user]);
   
-  const initSpeechRecognition = () => { if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) { const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; recognitionRef.current = new SpeechRecognition(); recognitionRef.current.continuous = false; recognitionRef.current.interimResults = false; recognitionRef.current.lang = 'en-IN'; recognitionRef.current.onstart = () => setHudState(HUDState.LISTENING); recognitionRef.current.onend = () => { if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); }; recognitionRef.current.onerror = (event: any) => { console.error("Speech Error", event.error); if (event.error === 'aborted' || event.error === 'no-speech') return; setHudState(HUDState.IDLE); }; recognitionRef.current.onresult = (event: any) => { processQuery(event.results[0][0].transcript); }; } };
+  const initSpeechRecognition = () => { if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) { const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; recognitionRef.current = new SpeechRecognition(); recognitionRef.current.continuous = false; recognitionRef.current.interimResults = false; recognitionRef.current.lang = 'en-IN'; recognitionRef.current.onstart = () => setHudState(HUDState.LISTENING); recognitionRef.current.onend = () => { if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); }; recognitionRef.current.onerror = (event: any) => { if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); console.error("Speech Error", event.error); if (event.error === 'aborted' || event.error === 'no-speech') return; setHudState(HUDState.IDLE); }; recognitionRef.current.onresult = (event: any) => { if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); processQuery(event.results[0][0].transcript); }; } };
   const loadMemory = (mobile: string) => { const history = localStorage.getItem(`nexa_chat_${mobile}`); if (history) { try { memoryRef.current = JSON.parse(history); } catch (e) { console.error("Failed to parse chat history", e); memoryRef.current = []; } } else { memoryRef.current = []; } };
   const saveMemory = (currentUser: UserProfile | null) => { if (currentUser) localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current)); };
   const getAudioContext = () => { if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(); return audioContextRef.current; };
@@ -100,13 +101,13 @@ const App: React.FC = () => {
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     loadMemory(profile.mobile);
     setChatLog([]);
+    setPendingIntro(null);
   
     setTimeout(async () => {
       try {
         const dynamicIntro = await generateIntroductoryMessage(profile);
-        setSystemStatus('ready');
         
-        let notificationPrefix = '';
+        let fullIntro = dynamicIntro;
         if (profile.role === UserRole.ADMIN) {
           try {
             const notifications: string[] = JSON.parse(localStorage.getItem('nexa_admin_notifications') || '[]');
@@ -114,15 +115,16 @@ const App: React.FC = () => {
               const names = notifications.map(n => n.match(/user '(.*?)'/)?.[1]).filter(Boolean as any as (x: string | undefined) => x is string);
               if (names.length > 0) {
                 let nameSummary = names.length === 1 ? names[0] : (names.length === 2 ? `${names[0]} aur ${names[1]}` : `${names.slice(0, -1).join(', ')}, aur ${names[names.length - 1]}`);
-                notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch rahe the. Aap chinta mat kijiye, maine sab aache se sambhal liya hai.`;
+                const notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch rahe the. Aap chinta mat kijiye, maine sab aache se sambhal liya hai.`;
+                fullIntro = notificationPrefix;
               }
               localStorage.removeItem('nexa_admin_notifications');
             }
           } catch(e) { localStorage.removeItem('nexa_admin_notifications'); }
         }
-
-        if (notificationPrefix) { speakSystemMessage(notificationPrefix, profile); } 
-        else if (memoryRef.current.length === 0) { speakSystemMessage(dynamicIntro, profile); } 
+        
+        setSystemStatus('ready');
+        if (memoryRef.current.length === 0) { setPendingIntro(fullIntro); } 
         else { setHudState(HUDState.IDLE); }
 
       } catch (e: any) {
@@ -146,17 +148,55 @@ const App: React.FC = () => {
   
   const handleApiKeySave = (apiKey: string) => {
     localStorage.setItem('nexa_api_key', apiKey);
-    if (user) {
-      // Re-run the initialization logic
-      handleLogin(user); 
+    if (user) { handleLogin(user); }
+  };
+
+  const handleLogout = () => { setUser(null); setSystemStatus('unauthenticated'); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); setPendingIntro(null); };
+  
+  const playAudio = (buffer: ArrayBuffer, currentState: HUDState) => { if (!isProcessingRef.current) return; const ctx = getAudioContext(); if (ctx.state === 'suspended') ctx.resume(); if (currentState !== HUDState.ANGRY) setHudState(HUDState.SPEAKING); try { const source = ctx.createBufferSource(); source.buffer = pcmToAudioBuffer(buffer, ctx); source.connect(ctx.destination); currentAudioSourceRef.current = source; source.onended = () => { currentAudioSourceRef.current = null; if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; } }; source.start(); } catch (e) { throw e; } };
+  const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => { if (isProcessingRef.current || !currentUser) return; if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); setHudState(HUDState.THINKING); isProcessingRef.current = true; const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() }; memoryRef.current.push(modelMessage); saveMemory(currentUser); setIsAudioLoading(true); try { const audioBuffer = await generateSpeech(displayText.replace(/Lohave/gi, 'लोहवे'), currentUser.role); setIsAudioLoading(false); if (!isProcessingRef.current) return; if (audioBuffer) { setChatLog(prev => [...prev, modelMessage]); playAudio(audioBuffer, HUDState.THINKING); } else { setChatLog(prev => [...prev, modelMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false; } } catch(e) { handleApiError(e, "Speak System Message"); } };
+  
+  const handleMicClick = () => {
+    unlockAudioContext();
+
+    if (pendingIntro) {
+      speakSystemMessage(pendingIntro, user);
+      setPendingIntro(null);
+      return;
+    }
+
+    if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) {
+      isProcessingRef.current = false;
+      recognitionRef.current?.abort();
+      if (currentAudioSourceRef.current) {
+        currentAudioSourceRef.current.onended = null;
+        currentAudioSourceRef.current.stop();
+        currentAudioSourceRef.current = null;
+      }
+      setHudState(HUDState.IDLE);
+      return;
+    }
+
+    if (hudState === HUDState.LISTENING) {
+      recognitionRef.current?.stop();
+    } else {
+      try {
+        recognitionRef.current?.start();
+        if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current);
+        listeningTimeoutRef.current = window.setTimeout(() => {
+          if (hudState === HUDState.LISTENING) {
+            console.warn("Listening timed out. Aborting.");
+            recognitionRef.current?.abort();
+          }
+        }, 15000); // 15-second failsafe
+      } catch (e) {
+        console.warn("Recognition start error, re-initializing.", e);
+        initSpeechRecognition();
+        setTimeout(() => recognitionRef.current?.start(), 100);
+      }
     }
   };
 
-  const handleLogout = () => { setUser(null); setSystemStatus('unauthenticated'); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); };
-  
-  const playAudio = (buffer: ArrayBuffer, currentState: HUDState) => { if (!isProcessingRef.current) return; const ctx = getAudioContext(); if (ctx.state === 'suspended') ctx.resume(); if (currentState !== HUDState.ANGRY) setHudState(HUDState.SPEAKING); try { const source = ctx.createBufferSource(); source.buffer = pcmToAudioBuffer(buffer, ctx); source.connect(ctx.destination); currentAudioSourceRef.current = source; source.onended = () => { currentAudioSourceRef.current = null; if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; } }; source.start(); } catch (e) { throw e; } };
-  const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => { if (isProcessingRef.current || !currentUser) return; setHudState(HUDState.THINKING); isProcessingRef.current = true; const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() }; memoryRef.current.push(modelMessage); saveMemory(currentUser); setIsAudioLoading(true); try { const audioBuffer = await generateSpeech(displayText.replace(/Lohave/gi, 'लोहवे'), currentUser.role); setIsAudioLoading(false); if (!isProcessingRef.current) return; if (audioBuffer) { setChatLog(prev => [...prev, modelMessage]); playAudio(audioBuffer, HUDState.THINKING); } else { setChatLog(prev => [...prev, modelMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false; } } catch(e) { handleApiError(e, "Speak System Message"); } };
-  const handleMicClick = () => { unlockAudioContext(); if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) { isProcessingRef.current = false; recognitionRef.current?.abort(); if (currentAudioSourceRef.current) { currentAudioSourceRef.current.onended = null; currentAudioSourceRef.current.stop(); currentAudioSourceRef.current = null; } setHudState(HUDState.IDLE); return; } if (hudState === HUDState.LISTENING) { recognitionRef.current?.stop(); } else { try { recognitionRef.current?.start(); } catch (e) { console.warn("Recognition start error", e); initSpeechRecognition(); setTimeout(() => recognitionRef.current?.start(), 100); } } };
   const handleApiError = (error: any, context: string) => { console.error(`Error in ${context}:`, error); const errorMessage: ChatMessage = { role: 'model', text: `SYSTEM ERROR: Connection interrupted. Please check logs. [${context}]`, timestamp: Date.now() }; setChatLog(prev => [...prev, errorMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false; setIsAudioLoading(false); };
   
   const processQuery = async (text: string) => {
