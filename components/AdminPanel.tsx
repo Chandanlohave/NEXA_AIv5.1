@@ -59,16 +59,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
           </button>
         </div>
 
-        <div>
-          <label className="block text-zinc-400 text-xs font-mono mb-1">Ambient Sound</label>
-          <button 
-            onClick={() => onConfigChange({...config, ambientSoundEnabled: !config.ambientSoundEnabled})}
-            className={`w-full py-2 text-xs font-mono border ${config.ambientSoundEnabled ? 'border-nexa-cyan text-nexa-cyan' : 'border-zinc-700 text-zinc-500'}`}
-          >
-            {config.ambientSoundEnabled ? 'ENABLED' : 'DISABLED'}
-          </button>
-        </div>
-
         <div className="pt-2 border-t border-zinc-800 space-y-2">
            <button 
              onClick={handleExportLogs}

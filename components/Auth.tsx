@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 
@@ -187,9 +184,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-nexa-cyan/20 rounded-full animate-spin-slow"></div>
          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div>
       </div>
-      
-      {/* Grid Overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
+
+      {/* --- HEADER --- */}
+      <div className="absolute top-8 text-center animate-fade-in z-50">
+        <div className="text-[10px] text-nexa-cyan/50 font-mono tracking-[0.4em]">CREATED BY</div>
+        <div className="text-xl font-bold text-white tracking-[0.2em]">CHANDAN LOHAVE</div>
+      </div>
 
       {/* --- MAIN HUD CONTAINER --- */}
       <div className="relative w-full max-w-sm z-50">
@@ -257,10 +258,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
                <div className="pt-4 space-y-4">
                  <CyberButton onClick={requestOtp} label="INITIATE" loading={loading} />
-                 <div className="text-center">
-                   <button onClick={() => setMode('ADMIN')} className="text-[9px] text-zinc-600 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">
-                     // Admin Console
-                   </button>
+                 <div className="flex justify-between items-center text-center mt-2 px-1">
+                    <button onClick={() => setMode('INIT')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-1 group">
+                       <span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> BACK
+                    </button>
+                    <button onClick={() => setMode('ADMIN')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">
+                      // Admin Console
+                    </button>
                  </div>
                </div>
             </div>
@@ -349,6 +353,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
            <div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>V.9.0.1</div>
         </div>
 
+      </div>
+
+      {/* --- FOOTER --- */}
+      <div className="absolute bottom-4 text-center text-[8px] font-mono text-nexa-cyan/30 tracking-widest animate-fade-in z-50">
+        © 2025 CHANDAN LOHAVE. ALL RIGHTS RESERVED.
       </div>
 
       {/* Styles for clip-path support */}

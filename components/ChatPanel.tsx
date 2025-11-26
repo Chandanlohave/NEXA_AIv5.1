@@ -3,6 +3,7 @@
 
 
 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage, UserRole, HUDState } from '../types';
 
@@ -21,24 +22,31 @@ interface TypewriterProps {
 
 const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate }) => {
   const [displayedText, setDisplayedText] = useState('');
-  
+  const timeoutRef = useRef<number | null>(null);
+
   useEffect(() => {
     setDisplayedText('');
     let index = 0;
-    const speed = 40; 
 
-    const intervalId = setInterval(() => {
+    const type = () => {
       if (index < text.length) {
         setDisplayedText((prev) => prev + text.charAt(index));
         index++;
-        onUpdate(); // Call the scroll function on each character update
+        onUpdate();
+        const delay = 30 + (Math.random() * 25 - 10); // Human-like delay
+        timeoutRef.current = window.setTimeout(type, delay);
       } else {
-        clearInterval(intervalId);
         onComplete();
       }
-    }, speed);
+    };
+    
+    type();
 
-    return () => clearInterval(intervalId);
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [text, onComplete, onUpdate]);
   
   return <span>{displayedText}</span>;
@@ -119,6 +127,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
           );
         })}
         
+        {/* Listening Indicator */}
+        {hudState === HUDState.LISTENING && (
+          <div className="flex justify-end animate-fade-in">
+            <div className="relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed text-right border-r border-nexa-red/30 bg-gradient-to-l from-nexa-red/5 to-transparent">
+              <div className="text-nexa-red flex items-center justify-end gap-2">
+                <div className="inline-flex items-center gap-1">
+                  <span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
+                  <span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span>
+                  <span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse"></span>
+                </div>
+                <span>Listening</span>
+              </div>
+              <div className="text-[8px] uppercase tracking-widest mt-1 opacity-50 text-nexa-red">
+                 {userRole === UserRole.ADMIN ? 'ADMIN' : 'USER'} &middot; CAPTURING
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Thinking Indicator */}
         {hudState === HUDState.THINKING && lastMessage?.role === 'user' && (
           <div className="flex justify-start animate-slide-up">

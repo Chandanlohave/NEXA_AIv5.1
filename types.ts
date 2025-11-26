@@ -20,18 +20,19 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  isAngry?: boolean;
 }
 
 export enum HUDState {
   IDLE = 'IDLE',
   LISTENING = 'LISTENING',
   THINKING = 'THINKING',
-  SPEAKING = 'SPEAKING'
+  SPEAKING = 'SPEAKING',
+  ANGRY = 'WARNING'
 }
 
 export interface AppConfig {
   introText: string;
   animationsEnabled: boolean;
   hudRotationSpeed: number;
-  ambientSoundEnabled: boolean;
 }

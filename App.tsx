@@ -26,76 +26,6 @@ const MicIcon = () => (
   </svg>
 );
 
-// --- AMBIENT SOUND GENERATOR ---
-class AmbientGenerator {
-  private ctx: AudioContext | null = null;
-  private mainGain: GainNode | null = null;
-  private oscillators: OscillatorNode[] = [];
-
-  start() {
-    if (this.ctx && this.ctx.state === 'running') return;
-    
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    this.ctx = new AudioContextClass();
-    this.mainGain = this.ctx.createGain();
-    this.mainGain.gain.value = 0.0;
-    this.mainGain.connect(this.ctx.destination);
-
-    const osc1 = this.ctx.createOscillator();
-    osc1.type = 'sawtooth';
-    osc1.frequency.value = 60; 
-    const filter1 = this.ctx.createBiquadFilter();
-    filter1.type = 'lowpass';
-    filter1.frequency.value = 150;
-    osc1.connect(filter1);
-    filter1.connect(this.mainGain);
-    
-    const osc2 = this.ctx.createOscillator();
-    osc2.type = 'sine';
-    osc2.frequency.value = 40;
-    const filter2 = this.ctx.createBiquadFilter();
-    filter2.type = 'lowpass';
-    filter2.frequency.value = 100;
-    osc2.connect(filter2);
-    filter2.connect(this.mainGain);
-
-    const lfo = this.ctx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.value = 0.15;
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 40;
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter1.frequency);
-
-    osc1.start();
-    osc2.start();
-    lfo.start();
-    this.oscillators.push(osc1, osc2, lfo);
-
-    const now = this.ctx.currentTime;
-    this.mainGain.gain.linearRampToValueAtTime(0.03, now + 4); 
-  }
-
-  stop() {
-    if (!this.ctx || !this.mainGain) return;
-    try {
-      const now = this.ctx.currentTime;
-      this.mainGain.gain.cancelScheduledValues(now);
-      this.mainGain.gain.setValueAtTime(this.mainGain.gain.value, now);
-      this.mainGain.gain.linearRampToValueAtTime(0, now + 1.5);
-      
-      setTimeout(() => {
-        this.oscillators.forEach(o => { try { o.stop(); o.disconnect(); } catch (e) {} });
-        this.mainGain?.disconnect();
-        if (this.ctx && this.ctx.state !== 'closed') { this.ctx.close(); }
-        this.ctx = null;
-        this.mainGain = null;
-        this.oscillators = [];
-      }, 1600);
-    } catch(e) { console.warn("Ambient stop error", e); }
-  }
-}
-
 // --- COMPONENTS ---
 
 const InstallBanner: React.FC<{ prompt: any, onInstall: () => void }> = ({ prompt, onInstall }) => {
@@ -146,9 +76,9 @@ const StatusBar = ({ role, onLogout, onSettings, latency }: any) => (
 const ControlDeck = ({ onMicClick, hudState }: any) => (
   <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/90 to-transparent z-40 relative flex items-center justify-center pb-6">
     <div className="absolute bottom-0 w-full h-[1px] bg-nexa-cyan/30"></div>
-    <button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center transition-all duration-300 group ${hudState === HUDState.LISTENING ? 'scale-110' : 'hover:scale-105 active:scale-95'}`}>
-      <div className={`absolute inset-0 bg-black border ${hudState === HUDState.LISTENING ? 'border-nexa-red shadow-[0_0_30px_rgba(255,42,42,0.6)]' : 'border-nexa-cyan shadow-[0_0_20px_rgba(41,223,255,0.4)]'} transition-all duration-300`} style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></div>
-      <div className={`relative z-10 ${hudState === HUDState.LISTENING ? 'text-nexa-red animate-pulse' : 'text-nexa-cyan group-hover:text-white'} transition-colors`}><MicIcon /></div>
+    <button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center transition-all duration-300 group ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${hudState === HUDState.IDLE ? 'animate-breathing' : ''}`}>
+      <div className={`absolute inset-0 bg-black border ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'border-nexa-red shadow-[0_0_30px_rgba(255,42,42,0.6)]' : 'border-nexa-cyan shadow-[0_0_20px_rgba(41,223,255,0.4)]'} transition-all duration-300`} style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></div>
+      <div className={`relative z-10 ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'text-nexa-red animate-pulse' : 'text-nexa-cyan group-hover:text-white'} transition-colors`}><MicIcon /></div>
     </button>
   </div>
 );
@@ -170,14 +100,15 @@ const App: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const [config, setConfig] = useState<AppConfig>({ introText: "", animationsEnabled: true, hudRotationSpeed: 1, ambientSoundEnabled: true });
+  const [config, setConfig] = useState<AppConfig>({ introText: "", animationsEnabled: true, hudRotationSpeed: 1 });
   const [latency, setLatency] = useState<number | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const ambientRef = useRef(new AmbientGenerator());
   const isProcessingRef = useRef(false);
   const memoryRef = useRef<ChatMessage[]>([]); // Full conversation history for AI memory
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
 
   useEffect(() => {
     const savedUser = localStorage.getItem('nexa_user');
@@ -187,7 +118,19 @@ const App: React.FC = () => {
       loadMemory(parsedUser.mobile);
     }
     const savedConfig = localStorage.getItem('nexa_config');
-    if (savedConfig) { setConfig(JSON.parse(savedConfig)); }
+    if (savedConfig) { 
+        try {
+            const parsedConfig = JSON.parse(savedConfig);
+            // Ensure ambientSoundEnabled is not carried over from old configs
+            if ('ambientSoundEnabled' in parsedConfig) {
+                delete parsedConfig.ambientSoundEnabled;
+            }
+            setConfig(parsedConfig); 
+        } catch (e) {
+            console.error("Failed to parse config, resetting.", e);
+            localStorage.removeItem('nexa_config');
+        }
+    }
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setInstallPrompt(e); });
 
     const unlockHandler = () => {
@@ -205,12 +148,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => { localStorage.setItem('nexa_config', JSON.stringify(config)); }, [config]);
-
-  useEffect(() => {
-    if (user && config.ambientSoundEnabled) { setTimeout(() => ambientRef.current.start(), 100); } 
-    else { ambientRef.current.stop(); }
-    return () => ambientRef.current.stop();
-  }, [user, config.ambientSoundEnabled]);
 
   useEffect(() => {
     if (!user || user.role !== UserRole.ADMIN) return;
@@ -311,15 +248,19 @@ const App: React.FC = () => {
   };
 
   const handleMicClick = () => {
-    unlockAudioContext(); 
+    unlockAudioContext();
     
-    if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING) {
-        isProcessingRef.current = false;
+    if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) {
+        isProcessingRef.current = false; // Stop any further processing
         if (recognitionRef.current) recognitionRef.current.abort();
-        if (audioContextRef.current) {
-           audioContextRef.current.suspend().then(() => audioContextRef.current?.resume());
+
+        if (currentAudioSourceRef.current) {
+            currentAudioSourceRef.current.onended = null; // Prevent onended from firing
+            currentAudioSourceRef.current.stop();
+            currentAudioSourceRef.current = null;
         }
-        setHudState(HUDState.IDLE);
+        
+        setHudState(HUDState.IDLE); // Immediately reset state
         return;
     }
 
@@ -355,21 +296,26 @@ const App: React.FC = () => {
      }
   };
 
-  const playAudio = (buffer: ArrayBuffer) => {
+  const playAudio = (buffer: ArrayBuffer, currentState: HUDState) => {
       if (!isProcessingRef.current) return;
       
       const ctx = getAudioContext();
       if (ctx.state === 'suspended') { ctx.resume(); }
 
-      setHudState(HUDState.SPEAKING);
+      if (currentState !== HUDState.ANGRY) {
+        setHudState(HUDState.SPEAKING);
+      }
       
       try {
           const decodedBuffer = pcmToAudioBuffer(buffer, ctx);
           const source = ctx.createBufferSource();
           source.buffer = decodedBuffer;
           source.connect(ctx.destination);
+          currentAudioSourceRef.current = source;
           
           source.onended = () => { 
+            currentAudioSourceRef.current = null;
+            // Only reset state if processing wasn't interrupted by user
             if(isProcessingRef.current) {
               setHudState(HUDState.IDLE); 
               isProcessingRef.current = false; 
@@ -386,7 +332,7 @@ const App: React.FC = () => {
     setHudState(HUDState.THINKING);
     isProcessingRef.current = true;
     
-    const textForDisplayAndMemory = displayText.replace(/लोহवे/g, 'Lohave');
+    const textForDisplayAndMemory = displayText.replace(/लोहवे/g, 'Lohave');
     const spokenText = applyPronunciationFix(textForDisplayAndMemory);
     const modelMessage: ChatMessage = { role: 'model', text: textForDisplayAndMemory, timestamp: Date.now() };
 
@@ -395,14 +341,14 @@ const App: React.FC = () => {
     setIsAudioLoading(true);
 
     try {
-      const audioBuffer = await generateSpeech(spokenText);
+      const audioBuffer = await generateSpeech(spokenText, currentUser.role);
       setIsAudioLoading(false);
       if (!isProcessingRef.current) return;
 
       if (audioBuffer) {
         try {
           setChatLog(prev => [...prev, modelMessage]);
-          playAudio(audioBuffer);
+          playAudio(audioBuffer, HUDState.THINKING);
         } catch (audioError) {
           console.error("Audio Playback Blocked.", audioError);
           setHudState(HUDState.IDLE);
@@ -434,7 +380,7 @@ const App: React.FC = () => {
               const notificationsJSON = localStorage.getItem('nexa_admin_notifications');
               let notifications = notificationsJSON ? JSON.parse(notificationsJSON) : [];
               const timestamp = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute:'2-digit' });
-              notifications.push(`${message.trim()} (at ${timestamp})`);
+              notifications.push(message.trim()); // The message is now pure Hinglish
               localStorage.setItem('nexa_admin_notifications', JSON.stringify(notifications));
           } catch(e) {
               console.error("Failed to save admin notification:", e);
@@ -445,21 +391,29 @@ const App: React.FC = () => {
 
   const processQuery = async (text: string) => {
     if (!user || isProcessingRef.current) return;
+
+    // --- MEMORY PROTECTION PROTOCOL ---
+    // Detect if the query is about development/code to prevent it from being saved to NEXA's persona memory.
+    const devKeywords = ['code', 'change', 'fix', 'update', 'file', 'component', 'kya change kiya', 'error', 'bug', 'debug', 'system', 'backend'];
+    const isDevQuery = user.role === UserRole.ADMIN && devKeywords.some(keyword => text.toLowerCase().includes(keyword));
+    // --- END MEMORY PROTECTION ---
     
     setHudState(HUDState.THINKING);
     isProcessingRef.current = true;
     
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
-    memoryRef.current.push(userMessage);
-    saveMemory(user);
+    
+    if (!isDevQuery) {
+        memoryRef.current.push(userMessage);
+        saveMemory(user);
+    }
     setChatLog(prev => [...prev, userMessage]); 
 
     try {
         const startTime = performance.now();
         
-        // PERFORMANCE FIX: Limit the history sent to the API to prevent high latency on long conversations.
-        const MAX_HISTORY_MESSAGES = 10; // Approx 5 turns
-        const recentHistory = memoryRef.current.slice(0, -1); // Get all messages except the current one
+        const MAX_HISTORY_MESSAGES = 10;
+        const recentHistory = memoryRef.current.slice(0, -1);
         const historyForApi = recentHistory.slice(-MAX_HISTORY_MESSAGES).map((msg: ChatMessage) => ({
             role: msg.role, parts: [{ text: msg.text }],
         }));
@@ -470,22 +424,44 @@ const App: React.FC = () => {
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
         
-        const responseAfterNotificationCheck = handleAdminNotifications(rawAiResponse, user);
+        let responseAfterNotificationCheck = handleAdminNotifications(rawAiResponse, user);
+        
+        const stateMatch = responseAfterNotificationCheck.match(/\[\[STATE:(.*?)\]\]/);
+        const nextState = stateMatch ? stateMatch[1] : null;
+        if(stateMatch) {
+            responseAfterNotificationCheck = responseAfterNotificationCheck.replace(/\[\[STATE:.*?\]\]/g, '');
+        }
+
+        if (nextState === 'ANGRY') {
+            setHudState(HUDState.ANGRY);
+            if (navigator.vibrate) {
+              navigator.vibrate([100, 50, 100]); // Haptic feedback
+            }
+        }
+        
         executeIntents(responseAfterNotificationCheck);
 
         const textForDisplayAndMemory = responseAfterNotificationCheck
-            .replace(/\[\[.*?\]\]/g, '') // Remove all intent tags for a clean display
+            .replace(/\[\[.*?\]\]/g, '')
             .trim()
-            .replace(/लोহवे/g, 'Lohave');
+            .replace(/लोहवे/g, 'Lohave');
         
         const spokenAiResponse = applyPronunciationFix(textForDisplayAndMemory);
         
-        const modelMessage: ChatMessage = { role: 'model', text: textForDisplayAndMemory, timestamp: Date.now() };
-        memoryRef.current.push(modelMessage);
-        saveMemory(user);
+        const modelMessage: ChatMessage = { 
+            role: 'model', 
+            text: textForDisplayAndMemory, 
+            timestamp: Date.now(),
+            isAngry: nextState === 'ANGRY' 
+        };
+
+        if (!isDevQuery) {
+            memoryRef.current.push(modelMessage);
+            saveMemory(user);
+        }
 
         setIsAudioLoading(true);
-        const audioBuffer = await generateSpeech(spokenAiResponse);
+        const audioBuffer = await generateSpeech(spokenAiResponse, user.role, nextState === 'ANGRY');
         setIsAudioLoading(false);
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
@@ -493,7 +469,7 @@ const App: React.FC = () => {
         if (audioBuffer) {
              try {
                 setChatLog(prev => [...prev, modelMessage]);
-                playAudio(audioBuffer);
+                playAudio(audioBuffer, nextState === 'ANGRY' ? HUDState.ANGRY : hudState);
              } catch (audioError) {
                 console.error("Audio Playback Blocked.", audioError);
                 setHudState(HUDState.IDLE);
@@ -510,8 +486,10 @@ const App: React.FC = () => {
         console.error("Process Query Error", e);
         const errorMessage: ChatMessage = { role: 'model', text: 'Connection interrupted. Please try again.', timestamp: Date.now() };
         setChatLog(prev => [...prev, errorMessage]);
-        memoryRef.current.push(errorMessage);
-        saveMemory(user);
+        if (!isDevQuery) {
+            memoryRef.current.push(errorMessage);
+            saveMemory(user);
+        }
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
     }
@@ -524,10 +502,8 @@ const App: React.FC = () => {
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     
     loadMemory(profile.mobile);
-    // PRIVACY FIX: Always clear the visual chat log on login for privacy.
     setChatLog([]); 
   
-    // Only speak intro if the chat history is empty, otherwise it feels repetitive.
     const shouldSpeakIntro = memoryRef.current.length === 0;
 
     const getAndSpeakIntro = async () => {
@@ -539,24 +515,42 @@ const App: React.FC = () => {
             try {
               const notifications: string[] = JSON.parse(notificationsJSON);
               if (notifications.length > 0) {
-                const notificationSummary = notifications.join(' aur ');
-                notificationPrefix = `Sir, welcome back. Ek update hai... jab aap offline the, ${notificationSummary}. Maine unhe politely mana kar diya, I hope maine aapse bina puche sahi decision liya.`;
+                const nameRegex = /user '(.*?)'/;
+                const names = notifications
+                  .map(n => n.match(nameRegex)?.[1])
+                  .filter((name): name is string => !!name);
+
+                if (names.length > 0) {
+                  let nameSummary = '';
+                  if (names.length === 1) {
+                    nameSummary = names[0];
+                  } else if (names.length === 2) {
+                    nameSummary = `${names[0]} aur ${names[1]}`;
+                  } else {
+                    nameSummary = `${names.slice(0, -1).join(', ')}, aur ${names[names.length - 1]}`;
+                  }
+                  
+                  const verb = names.length > 1 ? 'rahe the' : 'rahe the'; // Works for respectful singular and plural
+                  notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch ${verb}. Aap chinta mat kijiye, maine sab aache se sambhal liya hai.`;
+                }
                 localStorage.removeItem('nexa_admin_notifications');
               }
-            } catch(e) { /* ignore corrupted data */ }
+            } catch(e) { 
+              console.error("Failed to parse admin notifications", e);
+              localStorage.removeItem('nexa_admin_notifications'); // Clear corrupted data
+            }
           }
         }
 
         if (notificationPrefix) {
           speakSystemMessage(notificationPrefix, profile);
-          return; // Don't speak another intro if there was a notification.
+          return;
         }
 
         if (shouldSpeakIntro) {
           const dynamicIntro = await generateIntroductoryMessage(profile);
           speakSystemMessage(dynamicIntro, profile);
         } else {
-          // If not speaking intro, transition to idle faster.
           setHudState(HUDState.IDLE);
         }
 
