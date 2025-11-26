@@ -282,7 +282,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                    style={{ clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)' }}
                  >
                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                   <span className="relative z-10 flex items-center justify-center gap-2">
+                   </span> className="relative z-10 flex items-center justify-center gap-2">
                    {loading ? 'AUTHENTICATING...' : <>AUTHORIZE OVERRIDE <span className="text-xs opacity-70">{'>>'}</span></>}
                  </button>
                  
