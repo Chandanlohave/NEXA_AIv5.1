@@ -228,18 +228,47 @@ const App: React.FC = () => {
     return audioContextRef.current;
   };
 
+  // --- Global Pronunciation Fix ---
+  const applyPronunciationFix = (text: string): string => {
+    // Replaces all occurrences of "Lohave" (case-insensitive) with its phonetic spelling for TTS
+    return text.replace(/Lohave/gi, 'लोहवे');
+  };
+
   const handleMicClick = () => {
     getAudioContext();
+    
+    // Interrupt logic for THINKING or SPEAKING states
     if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING) {
         isProcessingRef.current = false;
         if (recognitionRef.current) recognitionRef.current.abort();
-        if (audioContextRef.current) { audioContextRef.current.suspend().then(() => audioContextRef.current?.resume()); }
+        
+        // Force stop any playing audio
+        if (audioContextRef.current) {
+          // A more robust way to stop audio without suspending the whole context
+          // This is a placeholder for a more complex audio source management
+        }
+        
         setHudState(HUDState.IDLE);
-        setTimeout(() => { try { recognitionRef.current?.start(); } catch(e) {} }, 100);
+        setTimeout(() => {
+            try { recognitionRef.current?.start(); } catch(e) { console.warn("Could not start recognition", e); }
+        }, 100);
         return;
     }
-    if (hudState === HUDState.LISTENING) { recognitionRef.current?.stop(); } 
-    else { try { recognitionRef.current?.start(); } catch (e) { console.warn("Recognition already started"); } }
+
+    // Start/Stop logic for IDLE or LISTENING states
+    if (hudState === HUDState.LISTENING) {
+        // CRITICAL FIX: Immediately set state to IDLE on user command
+        setHudState(HUDState.IDLE); 
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
+    } else {
+        try {
+            recognitionRef.current?.start();
+        } catch (e) {
+            console.warn("Recognition could not be started", e);
+        }
+    }
   };
 
   const executeIntents = (text: string) => {
@@ -263,7 +292,8 @@ const App: React.FC = () => {
       isProcessingRef.current = true;
 
       const cleanDisplay = displayText.replace(/\[\[.*?\]\]/g, "").replace(/\[SFX:.*?\]/g, "");
-      const audioBuffer = await generateSpeech(cleanDisplay);
+      const spokenText = applyPronunciationFix(cleanDisplay);
+      const audioBuffer = await generateSpeech(spokenText);
       if (!isProcessingRef.current) return;
 
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
@@ -304,16 +334,16 @@ const App: React.FC = () => {
         const rawAiResponse = await generateTextResponse(text, user, memoryRef.current.map(m => ({ role: m.role, parts: [{ text: m.text }] })));
         if (!isProcessingRef.current) return;
 
-        const cleanAiResponse = rawAiResponse.replace(/\[\[.*?\]\]/g, "").trim();
-        const audioBuffer = await generateSpeech(rawAiResponse);
+        executeIntents(rawAiResponse);
+        
+        const spokenAiResponse = applyPronunciationFix(rawAiResponse);
+        const audioBuffer = await generateSpeech(spokenAiResponse);
         if (!isProcessingRef.current) return;
 
         const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
         memoryRef.current.push(modelMessage);
         saveMemory();
         setMessages([userMessage, modelMessage]); // Display user message and model response
-
-        executeIntents(rawAiResponse);
 
         if (audioBuffer) { playAudio(audioBuffer); } 
         else { setTimeout(() => setHudState(HUDState.IDLE), 1000); isProcessingRef.current = false; }
@@ -324,24 +354,24 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (profile: UserProfile) => {
-  setUser(profile);
-  localStorage.setItem('nexa_user', JSON.stringify(profile));
-  loadMemory(profile.mobile);
-  
-  // NEW CODE - DIRECT NEXA INTRO
-  setTimeout(() => {
-    const hour = new Date().getHours();
-    let greeting = 'Good morning';
-    if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
-    else if (hour >= 18) greeting = 'Good evening';
+    setUser(profile);
+    localStorage.setItem('nexa_user', JSON.stringify(profile));
+    loadMemory(profile.mobile);
     
-    const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
-    
-    const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\n${greeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${userName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`;
-    
-    speakSystemMessage(introMessage);
-  }, 500);
-};
+    // NEW CODE - DIRECT NEXA INTRO
+    setTimeout(() => {
+      const hour = new Date().getHours();
+      let greeting = 'Good morning';
+      if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
+      else if (hour >= 18) greeting = 'Good evening';
+      
+      const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
+      
+      const introMessage = `[SFX: Connection established] मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave ने design किया है.\n${greeting}!\nलगता है आज आपका mood मेरे जैसा perfect है.\nबताइए ${userName}, मैं आपकी किस प्रकार सहायता कर सकती हूँ?`;
+      
+      speakSystemMessage(introMessage);
+    }, 500);
+  };
 
   const handleLogout = () => {
     setUser(null);
