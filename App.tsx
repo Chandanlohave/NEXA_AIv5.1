@@ -1,24 +1,10 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
-import { generateTextResponse, generateSpeech } from './services/geminiService';
+import { generateTextResponse, generateSpeech, generateIntroductoryMessage } from './services/geminiService';
 
 // --- ICONS ---
 
@@ -536,43 +522,56 @@ const App: React.FC = () => {
     setUser(profile);
     setHudState(HUDState.THINKING);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
-    setChatLog([]);
+    
     loadMemory(profile.mobile);
+    // PRIVACY FIX: Always clear the visual chat log on login for privacy.
+    setChatLog([]); 
   
-    setTimeout(() => {
-      const userName = profile.role === UserRole.ADMIN ? 'Chandan sir' : profile.name;
-      let loginMessage = '';
-      let notificationPrefix = '';
+    // Only speak intro if the chat history is empty, otherwise it feels repetitive.
+    const shouldSpeakIntro = memoryRef.current.length === 0;
 
-      if (profile.role === UserRole.ADMIN) {
-        const notificationsJSON = localStorage.getItem('nexa_admin_notifications');
-        if (notificationsJSON) {
-          try {
-            const notifications: string[] = JSON.parse(notificationsJSON);
-            if (notifications.length > 0) {
-              const notificationSummary = notifications.join(' aur ');
-              notificationPrefix = `Sir, welcome back. Ek update hai... jab aap offline the, ${notificationSummary}. Maine unhe politely mana kar diya, I hope maine aapse bina puche sahi decision liya.`;
-              localStorage.removeItem('nexa_admin_notifications');
-            }
-          } catch(e) { /* ignore corrupted data */ }
+    const getAndSpeakIntro = async () => {
+      try {
+        let notificationPrefix = '';
+        if (profile.role === UserRole.ADMIN) {
+          const notificationsJSON = localStorage.getItem('nexa_admin_notifications');
+          if (notificationsJSON) {
+            try {
+              const notifications: string[] = JSON.parse(notificationsJSON);
+              if (notifications.length > 0) {
+                const notificationSummary = notifications.join(' aur ');
+                notificationPrefix = `Sir, welcome back. Ek update hai... jab aap offline the, ${notificationSummary}. Maine unhe politely mana kar diya, I hope maine aapse bina puche sahi decision liya.`;
+                localStorage.removeItem('nexa_admin_notifications');
+              }
+            } catch(e) { /* ignore corrupted data */ }
+          }
         }
-      }
 
-      if (notificationPrefix) {
-        loginMessage = notificationPrefix;
-      } else {
-        if (memoryRef.current.length > 0) {
-          loginMessage = `Welcome back, ${userName}. Main ready hoon.`;
+        if (notificationPrefix) {
+          speakSystemMessage(notificationPrefix, profile);
+          return; // Don't speak another intro if there was a notification.
+        }
+
+        if (shouldSpeakIntro) {
+          const dynamicIntro = await generateIntroductoryMessage(profile);
+          speakSystemMessage(dynamicIntro, profile);
         } else {
-          const hour = new Date().getHours();
-          let greeting = 'Good morning';
-          if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
-          else if (hour >= 18) greeting = 'Good evening';
-          loginMessage = `मैं Nexa हूँ — आपकी Personal AI Assistant, जिसे Chandan Lohave نے design kiya hai.\n${greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye ${userName}, main aapki kis prakaar sahayata kar sakti hoon?`;
+          // If not speaking intro, transition to idle faster.
+          setHudState(HUDState.IDLE);
+        }
+
+      } catch (e) {
+        console.error("Failed to generate login message:", e);
+        if (shouldSpeakIntro) {
+          const fallbackMessage = `Welcome back, ${profile.name}. NEXA system is online.`;
+          speakSystemMessage(fallbackMessage, profile);
+        } else {
+           setHudState(HUDState.IDLE);
         }
       }
-      speakSystemMessage(loginMessage, profile);
-    }, 500);
+    };
+    
+    setTimeout(getAndSpeakIntro, 500);
   };
 
   const handleLogout = () => {
