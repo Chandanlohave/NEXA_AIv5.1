@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
@@ -287,23 +288,23 @@ const App: React.FC = () => {
   };
 
   const speakSystemMessage = async (displayText: string) => {
-      if (isProcessingRef.current) return;
-      setHudState(HUDState.THINKING);
-      isProcessingRef.current = true;
+    if (isProcessingRef.current) return;
+    setHudState(HUDState.THINKING);
+    isProcessingRef.current = true;
 
-      // Show text immediately to improve perceived performance
+    try {
+      // 1. Generate audio first
+      const spokenText = applyPronunciationFix(displayText);
+      const audioBuffer = await generateSpeech(spokenText);
+      if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
+
+      // 2. Now that we have audio, update UI and play them together
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
       memoryRef.current.push(modelMessage);
       saveMemory();
-      setMessages([modelMessage]);
+      setMessages([modelMessage]); // This will trigger the typewriter
       
       executeIntents(displayText);
-
-      // Generate audio in the background
-      const cleanDisplay = displayText.replace(/\[\[.*?\]\]/g, "").replace(/\[SFX:.*?\]/g, "");
-      const spokenText = applyPronunciationFix(cleanDisplay);
-      const audioBuffer = await generateSpeech(spokenText);
-      if (!isProcessingRef.current) return;
 
       if (audioBuffer) {
         playAudio(audioBuffer);
@@ -311,6 +312,11 @@ const App: React.FC = () => {
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
       }
+    } catch(e) {
+      console.error("Speak System Message Error:", e);
+      setHudState(HUDState.IDLE);
+      isProcessingRef.current = false;
+    }
   };
 
   const playAudio = (buffer: ArrayBuffer) => {
@@ -321,7 +327,12 @@ const App: React.FC = () => {
       const source = ctx.createBufferSource();
       source.buffer = decodedBuffer;
       source.connect(ctx.destination);
-      source.onended = () => { setHudState(HUDState.IDLE); isProcessingRef.current = false; };
+      source.onended = () => { 
+        if(isProcessingRef.current) {
+          setHudState(HUDState.IDLE); 
+          isProcessingRef.current = false; 
+        }
+      };
       source.start();
   };
 
@@ -334,35 +345,40 @@ const App: React.FC = () => {
     const userMessage: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     memoryRef.current.push(userMessage);
     saveMemory();
-    setMessages([userMessage]);
+    setMessages([userMessage]); // Show user message immediately for responsiveness
 
     try {
+        // 1. Get text response from AI
         const rawAiResponse = await generateTextResponse(text, user, memoryRef.current.map(m => ({ role: m.role, parts: [{ text: m.text }] })));
-        if (!isProcessingRef.current) return;
+        if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
 
-        // Display AI text response immediately for better UX
+        // 2. Get audio response from AI
+        const spokenAiResponse = applyPronunciationFix(rawAiResponse);
+        const audioBuffer = await generateSpeech(spokenAiResponse);
+        if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
+
+        // 3. SYNCHRONIZATION POINT: Now we have both, update UI and play audio
         const modelMessage: ChatMessage = { role: 'model', text: rawAiResponse, timestamp: Date.now() };
         memoryRef.current.push(modelMessage);
         saveMemory();
-        setMessages([userMessage, modelMessage]);
+        setMessages([userMessage, modelMessage]); // This will trigger the typewriter
         
         executeIntents(rawAiResponse);
-        
-        // Generate and play audio in the background
-        const spokenAiResponse = applyPronunciationFix(rawAiResponse);
-        const audioBuffer = await generateSpeech(spokenAiResponse);
-        if (!isProcessingRef.current) return;
 
         if (audioBuffer) {
             playAudio(audioBuffer);
         } else {
             setTimeout(() => {
-                setHudState(HUDState.IDLE);
-                isProcessingRef.current = false;
-            }, 1000);
+                if(isProcessingRef.current) {
+                  setHudState(HUDState.IDLE);
+                  isProcessingRef.current = false;
+                }
+            }, 1500);
         }
     } catch (e) {
         console.error("Process Query Error", e);
+        const errorMessage: ChatMessage = { role: 'model', text: 'Connection interrupted. Please try again.', timestamp: Date.now() };
+        setMessages([userMessage, errorMessage]);
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
     }
@@ -373,7 +389,9 @@ const App: React.FC = () => {
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     loadMemory(profile.mobile);
     
-    // NEW CODE - DIRECT NEXA INTRO
+    // VERCEL AUTOPLAY FIX: Unlock audio context on the first user gesture (login)
+    getAudioContext();
+    
     setTimeout(() => {
       const hour = new Date().getHours();
       let greeting = 'Good morning';
