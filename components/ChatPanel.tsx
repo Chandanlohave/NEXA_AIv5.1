@@ -10,15 +10,17 @@ interface ChatPanelProps {
 
 interface TypewriterProps {
   text: string;
+  onStart: () => void;
   onComplete: () => void;
   onUpdate: () => void;
 }
 
-const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate }) => {
+const TypewriterText: React.FC<TypewriterProps> = ({ text, onStart, onComplete, onUpdate }) => {
   const [displayedText, setDisplayedText] = useState('');
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
+    onStart();
     setDisplayedText('');
     let index = 0;
 
@@ -27,7 +29,8 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
         setDisplayedText((prev) => prev + text.charAt(index));
         index++;
         onUpdate();
-        const delay = 30 + (Math.random() * 25 - 10); // Human-like delay
+        // Slower, more natural typing speed to better match speech pace
+        const delay = 70 + (Math.random() * 40 - 20);
         timeoutRef.current = window.setTimeout(type, delay);
       } else {
         onComplete();
@@ -41,7 +44,7 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [text, onComplete, onUpdate]);
+  }, [text, onStart, onComplete, onUpdate]);
   
   return <span>{displayedText}</span>;
 };
@@ -99,7 +102,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
                   ) : (
                     <>
                       {shouldAnimate ? (
-                        <TypewriterText text={cleanTextForDisplay} onComplete={() => setIsTyping(false)} onUpdate={scrollToBottom} />
+                        <TypewriterText 
+                          text={cleanTextForDisplay} 
+                          onStart={() => setIsTyping(true)}
+                          onComplete={() => setIsTyping(false)} 
+                          onUpdate={scrollToBottom} 
+                        />
                       ) : (
                         <span className="whitespace-pre-wrap">{cleanTextForDisplay}</span>
                       )}

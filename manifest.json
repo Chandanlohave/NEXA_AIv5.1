@@ -1,7 +1,7 @@
 {
   "name": "NEXA AI",
   "short_name": "NEXA",
-  "start_url": ".",
+  "start_url": "/index.html",
   "id": "/",
   "scope": "/",
   "display": "standalone",
