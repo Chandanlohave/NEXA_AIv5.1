@@ -7,13 +7,6 @@ export interface UserProfile {
   name: string;
   mobile: string;
   role: UserRole;
-  theme: string;
-  chatHistory: ChatMessage[];
-  preferences: {
-    voice: string;
-    speed: number;
-    pitch: number;
-  };
 }
 
 export interface ChatMessage {
@@ -32,7 +25,6 @@ export enum HUDState {
 }
 
 export interface AppConfig {
-  introText: string;
   animationsEnabled: boolean;
   hudRotationSpeed: number;
 }

@@ -7,7 +7,7 @@ import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types
 import { generateTextResponse, generateSpeech, generateIntroductoryMessage } from './services/geminiService';
 
 // --- ICONS ---
-const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 1.9-.94 3.31-.826 3.31-2.37 0-3.35-.426-3.35-2.924 0-3.35a1.724 1.724 0 00-1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.94 1.543 2.924 1.543 3.35 0a1.724 1.724 0 002.573-1.066c1.543.94 3.31-.826 2.37-1.9.94-3.31.826-3.31 2.37 0 3.35.426 3.35 2.924 0 3.35a1.724 1.724 0 001.066 2.573c.94 1.543-.826 3.31-2.37 2.37-.94-1.543-2.924-1.543-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543-.94-3.31.826-2.37 1.9zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
+const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 1.9-.94 3.31-.826-3.31-2.37 0-3.35-.426-3.35-2.924 0-3.35a1.724 1.724 0 00-1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.94 1.543 2.924 1.543 3.35 0a1.724 1.724 0 002.573-1.066c1.543.94 3.31-.826 2.37-1.9.94-3.31.826-3.31 2.37 0 3.35.426 3.35 2.924 0 3.35a1.724 1.724 0 001.066 2.573c.94 1.543-.826 3.31-2.37 2.37-.94-1.543-2.924-1.543-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543-.94-3.31.826-2.37 1.9zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 const MicIcon = () => ( <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m-4-12v8m8-8v8m-12-5v2m16-2v2" /></svg> );
 
@@ -17,35 +17,7 @@ const StatusBar = ({ role, onLogout, onSettings, latency }: any) => ( <div class
 const ControlDeck = ({ onMicClick, hudState }: any) => ( <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/90 to-transparent z-40 relative flex items-center justify-center pb-6"><div className="absolute bottom-0 w-full h-[1px] bg-nexa-cyan/30"></div><button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center transition-all duration-300 group ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${hudState === HUDState.IDLE ? 'animate-breathing' : ''}`}><div className={`absolute inset-0 bg-black border ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'border-nexa-red shadow-[0_0_30px_rgba(255,42,42,0.6)]' : 'border-nexa-cyan shadow-[0_0_20px_rgba(41,223,255,0.4)]'} transition-all duration-300`} style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></div><div className={`relative z-10 ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'text-nexa-red animate-pulse' : 'text-nexa-cyan group-hover:text-white'} transition-colors`}><MicIcon /></div></button></div> );
 const pcmToAudioBuffer = (pcmData: ArrayBuffer, context: AudioContext): AudioBuffer => { const int16Array = new Int16Array(pcmData); const float32Array = new Float32Array(int16Array.length); for (let i = 0; i < int16Array.length; i++) { float32Array[i] = int16Array[i] / 32768; } const buffer = context.createBuffer(1, float32Array.length, 24000); buffer.getChannelData(0).set(float32Array); return buffer; };
 
-type SystemStatus = 'unauthenticated' | 'initializing' | 'ready' | 'error' | 'needs_config';
-
-const ApiConfigScreen: React.FC<{ onSave: (apiKey: string) => void }> = ({ onSave }) => {
-  const [apiKey, setApiKey] = useState('');
-  return (
-    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-6 text-center z-[100] animate-fade-in">
-      <div className="border border-nexa-yellow/50 p-8 max-w-sm w-full bg-nexa-yellow/5 backdrop-blur-md">
-        <h1 className="text-nexa-yellow text-lg font-bold tracking-widest font-mono">CONFIGURATION REQUIRED</h1>
-        <p className="text-zinc-300 mt-4 font-sans leading-relaxed text-sm">
-          The Gemini API Key is missing. As the administrator, please enter your key below to activate NEXA.
-        </p>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="Enter API Key here..."
-          className="w-full bg-black/50 border border-nexa-yellow/30 text-white text-center font-mono mt-6 py-3 px-4 focus:ring-nexa-yellow focus:border-nexa-yellow"
-        />
-        <button 
-          onClick={() => onSave(apiKey)}
-          disabled={!apiKey}
-          className="mt-6 bg-nexa-yellow text-black font-bold tracking-widest py-3 px-8 hover:bg-white transition-colors disabled:bg-zinc-700 disabled:cursor-not-allowed"
-        >
-          SAVE & RE-INITIALIZE
-        </button>
-      </div>
-    </div>
-  );
-};
+type SystemStatus = 'unauthenticated' | 'initializing' | 'ready' | 'error';
 
 // --- MAIN APP ---
 const App: React.FC = () => {
@@ -58,7 +30,7 @@ const App: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const [config, setConfig] = useState<AppConfig>({ introText: "", animationsEnabled: true, hudRotationSpeed: 1 });
+  const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1 });
   const [latency, setLatency] = useState<number | null>(null);
   const [pendingIntro, setPendingIntro] = useState<string | null>(null);
 
@@ -78,9 +50,8 @@ const App: React.FC = () => {
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setInstallPrompt(e); });
     
     const unlockHandler = () => { unlockAudioContext(); window.removeEventListener('touchstart', unlockHandler); window.removeEventListener('click', unlockHandler); };
-    window.addEventListener('touchstart', unlockHandler); window.addEventListener('click', unlockHandler);
-
-    initSpeechRecognition();
+    window.addEventListener('touchstart', unlockHandler);
+    window.addEventListener('click', unlockHandler);
 
     return () => { window.removeEventListener('touchstart', unlockHandler); window.removeEventListener('click', unlockHandler); };
   }, []);
@@ -88,7 +59,18 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('nexa_config', JSON.stringify(config)); }, [config]);
   useEffect(() => { if (!user || user.role !== UserRole.ADMIN) return; const checkTime = () => { const now = new Date(); if (now.getHours() === 23 && now.getMinutes() === 0) { speakSystemMessage("Sir… 11 baj chuke hain. Kal aapko Encave Cafe duty bhi karni hai. Please rest kar lijiye… main yahin hoon.", user); } if (now.getHours() === 8 && now.getMinutes() === 0) { speakSystemMessage("Sir… aaj Encave Café duty hai, time se tayar ho jaiye.", user); } }; const interval = setInterval(checkTime, 60000); return () => clearInterval(interval); }, [user]);
   
-  const initSpeechRecognition = () => { if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) { const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; recognitionRef.current = new SpeechRecognition(); recognitionRef.current.continuous = false; recognitionRef.current.interimResults = false; recognitionRef.current.lang = 'en-IN'; recognitionRef.current.onstart = () => setHudState(HUDState.LISTENING); recognitionRef.current.onend = () => { if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); if (hudState === HUDState.LISTENING) setHudState(HUDState.IDLE); }; recognitionRef.current.onerror = (event: any) => { if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); console.error("Speech Error", event.error); if (event.error === 'aborted' || event.error === 'no-speech') return; setHudState(HUDState.IDLE); }; recognitionRef.current.onresult = (event: any) => { if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current); processQuery(event.results[0][0].transcript); }; } };
+  // Auto-play intro message when system is ready
+  useEffect(() => {
+    if (systemStatus === 'ready' && pendingIntro && user) {
+      const introTimeout = setTimeout(() => {
+        speakSystemMessage(pendingIntro, user);
+        setPendingIntro(null);
+      }, 500); // Small delay for UI transition
+
+      return () => clearTimeout(introTimeout);
+    }
+  }, [systemStatus, pendingIntro, user]);
+
   const loadMemory = (mobile: string) => { const history = localStorage.getItem(`nexa_chat_${mobile}`); if (history) { try { memoryRef.current = JSON.parse(history); } catch (e) { console.error("Failed to parse chat history", e); memoryRef.current = []; } } else { memoryRef.current = []; } };
   const saveMemory = (currentUser: UserProfile | null) => { if (currentUser) localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current)); };
   const getAudioContext = () => { if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(); return audioContextRef.current; };
@@ -105,39 +87,37 @@ const App: React.FC = () => {
   
     setTimeout(async () => {
       try {
-        const dynamicIntro = await generateIntroductoryMessage(profile);
+        let dynamicIntro = await generateIntroductoryMessage(profile);
         
-        let fullIntro = dynamicIntro;
         if (profile.role === UserRole.ADMIN) {
           try {
             const notifications: string[] = JSON.parse(localStorage.getItem('nexa_admin_notifications') || '[]');
             if (notifications.length > 0) {
               const names = notifications.map(n => n.match(/user '(.*?)'/)?.[1]).filter(Boolean as any as (x: string | undefined) => x is string);
               if (names.length > 0) {
-                let nameSummary = names.length === 1 ? names[0] : (names.length === 2 ? `${names[0]} aur ${names[1]}` : `${names.slice(0, -1).join(', ')}, aur ${names[names.length - 1]}`);
-                const notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch rahe the. Aap chinta mat kijiye, maine sab aache se sambhal liya hai.`;
-                fullIntro = notificationPrefix;
+                const uniqueNames = [...new Set(names)];
+                let nameSummary = uniqueNames.length === 1 ? uniqueNames[0] : (uniqueNames.length === 2 ? `${uniqueNames[0]} aur ${uniqueNames[1]}` : `${uniqueNames.slice(0, -1).join(', ')}, aur ${uniqueNames[uniqueNames.length - 1]}`);
+                const notificationPrefix = `Sir, aapke wapas aane ka intezaar tha. Ek choti si report hai... jab aap yahan nahi the, tab ${nameSummary} aapke baare mein pooch rahe the. Aap chinta mat kijiye, maine sab aache se, apne style me, sambhal liya hai.`;
+                dynamicIntro = `${notificationPrefix}\n\n${dynamicIntro}`;
               }
               localStorage.removeItem('nexa_admin_notifications');
             }
-          } catch(e) { localStorage.removeItem('nexa_admin_notifications'); }
+          } catch(e) {
+            console.error("Failed to process admin notifications", e);
+            localStorage.removeItem('nexa_admin_notifications');
+          }
         }
         
         setSystemStatus('ready');
-        if (memoryRef.current.length === 0) { setPendingIntro(fullIntro); } 
+        if (memoryRef.current.length === 0) { setPendingIntro(dynamicIntro); } 
         else { setHudState(HUDState.IDLE); }
 
       } catch (e: any) {
         console.error("Initialization Error:", e);
         const errorMessageString = e.toString();
         
-        if (errorMessageString.includes('API_KEY_MISSING') && profile.role === UserRole.ADMIN) {
-            setSystemStatus('needs_config');
-            return;
-        }
-
         let friendlyError = 'Connection to NEXA Core failed. Please try again.';
-        if (errorMessageString.includes('API_KEY_MISSING')) { friendlyError = 'SYSTEM OFFLINE: API Key is not configured in the deployment environment. Please contact the administrator.'; } 
+        if (errorMessageString.includes('API_KEY_MISSING')) { friendlyError = 'SYSTEM OFFLINE: API Key not found. Ensure it is configured correctly in the Google AI Studio environment.'; } 
         else if (errorMessageString.includes('404')) { friendlyError = 'SYSTEM OFFLINE: The required AI model was not found. The system configuration may be outdated.'; }
         else if (errorMessageString.toLowerCase().includes('failed to fetch')) { friendlyError = 'NETWORK ERROR: Cannot connect to NEXA systems. Please check your internet connection.'; }
         setSystemError(friendlyError);
@@ -145,15 +125,10 @@ const App: React.FC = () => {
       }
     }, 500);
   };
-  
-  const handleApiKeySave = (apiKey: string) => {
-    localStorage.setItem('nexa_api_key', apiKey);
-    if (user) { handleLogin(user); }
-  };
 
   const handleLogout = () => { setUser(null); setSystemStatus('unauthenticated'); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); setPendingIntro(null); };
   
-  const playAudio = (buffer: ArrayBuffer, currentState: HUDState) => { if (!isProcessingRef.current) return; const ctx = getAudioContext(); if (ctx.state === 'suspended') ctx.resume(); if (currentState !== HUDState.ANGRY) setHudState(HUDState.SPEAKING); try { const source = ctx.createBufferSource(); source.buffer = pcmToAudioBuffer(buffer, ctx); source.connect(ctx.destination); currentAudioSourceRef.current = source; source.onended = () => { currentAudioSourceRef.current = null; if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; } }; source.start(); } catch (e) { throw e; } };
+  const playAudio = (buffer: ArrayBuffer) => { if (!isProcessingRef.current) return; const ctx = getAudioContext(); if (ctx.state === 'suspended') ctx.resume(); try { const source = ctx.createBufferSource(); source.buffer = pcmToAudioBuffer(buffer, ctx); source.connect(ctx.destination); currentAudioSourceRef.current = source; source.onended = () => { currentAudioSourceRef.current = null; if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; } }; source.start(); } catch (e) { throw e; } };
   
   const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => {
     if (isProcessingRef.current || !currentUser) return;
@@ -169,13 +144,15 @@ const App: React.FC = () => {
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
       memoryRef.current.push(modelMessage);
       saveMemory(currentUser);
-      setChatLog(prev => [...prev, modelMessage]);
 
       if (!isProcessingRef.current) return;
 
       if (audioBuffer) {
-        playAudio(audioBuffer, HUDState.THINKING);
+        setHudState(HUDState.SPEAKING);
+        setChatLog(prev => [...prev, modelMessage]);
+        playAudio(audioBuffer);
       } else {
+        setChatLog(prev => [...prev, modelMessage]);
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
       }
@@ -184,8 +161,11 @@ const App: React.FC = () => {
       setIsAudioLoading(false);
   
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
-      memoryRef.current.push(modelMessage);
-      saveMemory(currentUser);
+      // This was being added twice in the original logic, fixed here.
+      if (!memoryRef.current.find(m => m.timestamp === modelMessage.timestamp)) {
+        memoryRef.current.push(modelMessage);
+        saveMemory(currentUser);
+      }
       setChatLog(prev => [...prev, modelMessage]);
       
       const audioFailMessage: ChatMessage = { 
@@ -204,41 +184,89 @@ const App: React.FC = () => {
 
   const handleMicClick = () => {
     unlockAudioContext();
-
-    if (pendingIntro) {
-      speakSystemMessage(pendingIntro, user);
-      setPendingIntro(null);
-      return;
-    }
-
-    if (hudState === HUDState.THINKING || hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) {
+    
+    // CRITICAL FIX: Instant interruption logic
+    if (isProcessingRef.current) {
       isProcessingRef.current = false;
       recognitionRef.current?.abort();
       if (currentAudioSourceRef.current) {
-        currentAudioSourceRef.current.onended = null;
+        currentAudioSourceRef.current.onended = null; // Prevent onended from firing
         currentAudioSourceRef.current.stop();
         currentAudioSourceRef.current = null;
       }
       setHudState(HUDState.IDLE);
+      setIsAudioLoading(false); // Ensure loading indicators are off
       return;
     }
-
+  
     if (hudState === HUDState.LISTENING) {
       recognitionRef.current?.stop();
     } else {
-      try {
-        recognitionRef.current?.start();
+      // Re-initialize every time for robustness against stale instances
+      if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
+  
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-IN';
+  
+        recognition.onstart = () => {
+          setHudState(HUDState.LISTENING);
+        };
+  
+        recognition.onend = () => {
+          if (listeningTimeoutRef.current) {
+            clearTimeout(listeningTimeoutRef.current);
+            listeningTimeoutRef.current = null;
+          }
+          setHudState(currentState =>
+            currentState === HUDState.LISTENING ? HUDState.IDLE : currentState
+          );
+          recognitionRef.current = null;
+        };
+  
+        recognition.onerror = (event: any) => {
+          console.error("Speech Recognition Error:", event.error);
+          let message = "An unknown microphone error occurred.";
+          if (event.error === 'not-allowed') {
+            message = "Microphone access denied. Please enable it in your browser settings.";
+          } else if (event.error === 'no-speech') {
+            message = "I didn't hear anything. Please try speaking again.";
+          } else if (event.error === 'network') {
+            message = "Network error with the speech service. Please check your connection.";
+          }
+          const errorMessage: ChatMessage = { role: 'model', text: `// MIC ERROR: ${message}`, timestamp: Date.now() };
+          setChatLog(prev => [...prev, errorMessage]);
+          setHudState(HUDState.IDLE);
+        };
+  
+        recognition.onresult = (event: any) => {
+          if (listeningTimeoutRef.current) {
+            clearTimeout(listeningTimeoutRef.current);
+            listeningTimeoutRef.current = null;
+          }
+          const transcript = event.results?.[0]?.[0]?.transcript;
+          if (transcript) {
+            processQuery(transcript);
+          } else {
+            console.warn("Speech recognition got a result, but the transcript was empty.");
+            const errorMessage: ChatMessage = { role: 'model', text: `// MIC INFO: I heard something, but couldn't make it out. Please try again.`, timestamp: Date.now() };
+            setChatLog(prev => [...prev, errorMessage]);
+          }
+        };
+  
+        recognition.start();
         if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current);
         listeningTimeoutRef.current = window.setTimeout(() => {
-          if (hudState === HUDState.LISTENING) {
-            console.warn("Listening timed out. Aborting.");
-            recognitionRef.current?.abort();
-          }
-        }, 15000); // 15-second failsafe
-      } catch (e) {
-        console.warn("Recognition start error, re-initializing.", e);
-        initSpeechRecognition();
-        setTimeout(() => recognitionRef.current?.start(), 100);
+          console.warn("Listening timed out. Aborting.");
+          recognition.abort();
+        }, 15000);
+  
+      } else {
+        const errorMessage: ChatMessage = { role: 'model', text: `// SYSTEM ERROR: Speech Recognition is not supported by your browser.`, timestamp: Date.now() };
+        setChatLog(prev => [...prev, errorMessage]);
       }
     }
   };
@@ -294,15 +322,23 @@ const App: React.FC = () => {
         setIsAudioLoading(false);
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
-        if (audioBuffer) { setChatLog(prev => [...prev, modelMessage]); playAudio(audioBuffer, nextState === 'ANGRY' ? HUDState.ANGRY : hudState); } 
-        else { setChatLog(prev => [...prev, modelMessage]); setHudState(HUDState.IDLE); isProcessingRef.current = false; }
+        
+        if (audioBuffer) { 
+          const finalState = nextState === 'ANGRY' ? HUDState.ANGRY : HUDState.SPEAKING;
+          setHudState(finalState);
+          setChatLog(prev => [...prev, modelMessage]); 
+          playAudio(audioBuffer); 
+        } else { 
+          setChatLog(prev => [...prev, modelMessage]); 
+          setHudState(HUDState.IDLE); 
+          isProcessingRef.current = false; 
+        }
     } catch (e) { handleApiError(e, "Process Query"); }
   };
 
   // --- RENDER LOGIC ---
   if (systemStatus === 'unauthenticated') { return <Auth onLogin={handleLogin} />; }
   if (systemStatus === 'initializing') { return ( <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-nexa-cyan font-mono z-[100]"> <div className="relative w-32 h-32 flex items-center justify-center"><div className="absolute w-full h-full border-2 border-nexa-cyan rounded-full border-t-transparent animate-spin"></div><div className="text-2xl font-bold tracking-widest">NEXA</div></div><p className="mt-8 tracking-[0.3em] animate-pulse">CONNECTING TO CORE...</p></div> ); }
-  if (systemStatus === 'needs_config') { return <ApiConfigScreen onSave={handleApiKeySave} />; }
   if (systemStatus === 'error') { return ( <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-6 text-center z-[100]"> <div className="border border-red-500/50 p-8 max-w-sm w-full bg-red-900/10 backdrop-blur-md"><h1 className="text-red-500 text-lg font-bold tracking-widest font-mono">CONNECTION FAILED</h1><p className="text-zinc-300 mt-4 font-sans leading-relaxed">{systemError}</p><button onClick={handleLogout} className="mt-8 bg-red-600 text-white font-bold tracking-widest py-3 px-8 hover:bg-red-500 transition-colors">RESTART</button></div></div> ); }
 
   return (

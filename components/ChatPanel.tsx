@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage, UserRole, HUDState } from '../types';
 
@@ -91,7 +85,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
             label = userRole === UserRole.ADMIN ? 'ADMIN' : 'USER';
           }
           
-          const shouldAnimate = isLastMessage && !isUser && hudState === HUDState.SPEAKING;
+          const shouldAnimate = isLastMessage && !isUser && (hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY);
           const showAudioLoader = isLastMessage && !isUser && isAudioLoading;
           
           const cleanTextForDisplay = msg.text.trim();

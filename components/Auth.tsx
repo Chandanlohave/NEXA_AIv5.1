@@ -118,13 +118,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleAdminLogin = () => {
     if (formData.username === 'Chandan' && formData.password === 'Nexa') {
+      // FIX: Removed properties not present in UserProfile type.
       completeLogin({
         name: 'Chandan',
         mobile: '0000000000',
         role: UserRole.ADMIN,
-        theme: 'DARK_NEON',
-        chatHistory: [],
-        preferences: { voice: 'default', speed: 1, pitch: 1 }
       });
     } else {
       setError('// ERROR: INVALID CREDENTIALS');
@@ -155,13 +153,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const verifyOtp = () => {
     if (formData.otp === generatedOtp) {
+      // FIX: Removed properties not present in UserProfile type.
       completeLogin({
         name: formData.fullName,
         mobile: formData.mobile,
         role: UserRole.USER,
-        theme: 'DARK_NEON',
-        chatHistory: [],
-        preferences: { voice: 'default', speed: 1, pitch: 1 }
       });
     } else {
       setError('// ERROR: MISMATCH DETECTED');
