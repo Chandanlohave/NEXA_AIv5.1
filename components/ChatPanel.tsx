@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ChatMessage, UserRole, HUDState } from '../types';
 
 interface ChatPanelProps {
@@ -6,37 +6,38 @@ interface ChatPanelProps {
   userRole?: UserRole;
   hudState?: HUDState;
   isAudioLoading?: boolean;
+  onTypingComplete: () => void;
 }
 
 interface TypewriterProps {
   text: string;
-  onStart: () => void;
   onComplete: () => void;
   onUpdate: () => void;
 }
 
-const TypewriterText: React.FC<TypewriterProps> = ({ text, onStart, onComplete, onUpdate }) => {
-  const [displayedText, setDisplayedText] = useState('');
+const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate }) => {
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    onStart();
-    setDisplayedText('');
     let index = 0;
 
     const type = () => {
       if (index < text.length) {
-        setDisplayedText((prev) => prev + text.charAt(index));
+        // This is a direct DOM update, which is not ideal in React,
+        // but for a typewriter effect it's much more performant than state updates per character.
+        // We will set the final state once at the end.
+        const currentText = text.substring(0, index + 1);
+        if(spanRef.current) spanRef.current.textContent = currentText;
         index++;
         onUpdate();
-        // Slower, more natural typing speed to better match speech pace
-        const delay = 70 + (Math.random() * 40 - 20);
+        const delay = 30 + (Math.random() * 25 - 10); // Human-like delay
         timeoutRef.current = window.setTimeout(type, delay);
       } else {
         onComplete();
       }
     };
     
+    const spanRef = React.createRef<HTMLSpanElement>();
     type();
 
     return () => {
@@ -44,14 +45,15 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onStart, onComplete, 
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [text, onStart, onComplete, onUpdate]);
+  }, [text, onComplete, onUpdate]);
   
-  return <span>{displayedText}</span>;
+  const spanRef = React.createRef<HTMLSpanElement>();
+  return <span ref={spanRef}></span>;
 };
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USER, hudState, isAudioLoading }) => {
+
+const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USER, hudState, isAudioLoading, onTypingComplete }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isTyping, setIsTyping] = useState(false);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -64,7 +66,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, hudState, isTyping]);
+  }, [messages, hudState]);
 
   const lastMessage = messages[messages.length - 1];
 
@@ -102,12 +104,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
                   ) : (
                     <>
                       {shouldAnimate ? (
-                        <TypewriterText 
-                          text={cleanTextForDisplay} 
-                          onStart={() => setIsTyping(true)}
-                          onComplete={() => setIsTyping(false)} 
-                          onUpdate={scrollToBottom} 
-                        />
+                        <TypewriterText text={cleanTextForDisplay} onComplete={onTypingComplete} onUpdate={scrollToBottom} />
                       ) : (
                         <span className="whitespace-pre-wrap">{cleanTextForDisplay}</span>
                       )}

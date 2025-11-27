@@ -31,6 +31,8 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1 });
   const [latency, setLatency] = useState<number | null>(null);
   const [pendingIntro, setPendingIntro] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -66,6 +68,16 @@ const App: React.FC = () => {
       return () => clearTimeout(introTimeout);
     }
   }, [systemStatus, pendingIntro, user]);
+
+  // This effect transitions the system back to IDLE once both speaking and typing are complete.
+  useEffect(() => {
+    if (!isTyping && !isAudioPlaying && isProcessingRef.current) {
+      if (hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) {
+        setHudState(HUDState.IDLE);
+        isProcessingRef.current = false;
+      }
+    }
+  }, [isTyping, isAudioPlaying, hudState]);
 
   const loadMemory = (mobile: string) => { const history = localStorage.getItem(`nexa_chat_${mobile}`); if (history) { try { memoryRef.current = JSON.parse(history); } catch (e) { console.error("Failed to parse chat history", e); memoryRef.current = []; } } else { memoryRef.current = []; } };
   const saveMemory = (currentUser: UserProfile | null) => { if (currentUser) localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current)); };
@@ -124,7 +136,25 @@ const App: React.FC = () => {
 
   const handleLogout = () => { setUser(null); setSystemStatus('unauthenticated'); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); setPendingIntro(null); };
   
-  const playAudio = (buffer: ArrayBuffer) => { if (!isProcessingRef.current) return; const ctx = getAudioContext(); if (ctx.state === 'suspended') ctx.resume(); try { const source = ctx.createBufferSource(); source.buffer = pcmToAudioBuffer(buffer, ctx); source.connect(ctx.destination); currentAudioSourceRef.current = source; source.onended = () => { currentAudioSourceRef.current = null; if(isProcessingRef.current) { setHudState(HUDState.IDLE); isProcessingRef.current = false; } }; source.start(); } catch (e) { throw e; } };
+  const playAudio = (buffer: ArrayBuffer, onEndCallback: () => void) => {
+    if (!isProcessingRef.current) return;
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+    try {
+      const source = ctx.createBufferSource();
+      source.buffer = pcmToAudioBuffer(buffer, ctx);
+      source.connect(ctx.destination);
+      currentAudioSourceRef.current = source;
+      source.onended = () => {
+        currentAudioSourceRef.current = null;
+        onEndCallback();
+      };
+      source.start();
+    } catch (e) {
+      onEndCallback();
+      throw e;
+    }
+  };
   
   const speakSystemMessage = async (displayText: string, currentUser: UserProfile | null) => {
     if (isProcessingRef.current || !currentUser) return;
@@ -145,8 +175,10 @@ const App: React.FC = () => {
 
       if (audioBuffer) {
         setHudState(HUDState.SPEAKING);
+        setIsTyping(true);
+        setIsAudioPlaying(true);
         setChatLog(prev => [...prev, modelMessage]);
-        playAudio(audioBuffer);
+        playAudio(audioBuffer, () => setIsAudioPlaying(false));
       } else {
         setChatLog(prev => [...prev, modelMessage]);
         setHudState(HUDState.IDLE);
@@ -157,7 +189,6 @@ const App: React.FC = () => {
       setIsAudioLoading(false);
   
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
-      // This was being added twice in the original logic, fixed here.
       if (!memoryRef.current.find(m => m.timestamp === modelMessage.timestamp)) {
         memoryRef.current.push(modelMessage);
         saveMemory(currentUser);
@@ -181,24 +212,24 @@ const App: React.FC = () => {
   const handleMicClick = () => {
     unlockAudioContext();
     
-    // CRITICAL FIX: Instant interruption logic
     if (isProcessingRef.current) {
       isProcessingRef.current = false;
       recognitionRef.current?.abort();
       if (currentAudioSourceRef.current) {
-        currentAudioSourceRef.current.onended = null; // Prevent onended from firing
+        currentAudioSourceRef.current.onended = null;
         currentAudioSourceRef.current.stop();
         currentAudioSourceRef.current = null;
       }
       setHudState(HUDState.IDLE);
-      setIsAudioLoading(false); // Ensure loading indicators are off
+      setIsAudioLoading(false);
+      setIsTyping(false);
+      setIsAudioPlaying(false);
       return;
     }
   
     if (hudState === HUDState.LISTENING) {
       recognitionRef.current?.stop();
     } else {
-      // Re-initialize every time for robustness against stale instances
       if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
@@ -322,8 +353,10 @@ const App: React.FC = () => {
         if (audioBuffer) { 
           const finalState = nextState === 'ANGRY' ? HUDState.ANGRY : HUDState.SPEAKING;
           setHudState(finalState);
+          setIsTyping(true);
+          setIsAudioPlaying(true);
           setChatLog(prev => [...prev, modelMessage]); 
-          playAudio(audioBuffer); 
+          playAudio(audioBuffer, () => setIsAudioPlaying(false)); 
         } else { 
           setChatLog(prev => [...prev, modelMessage]); 
           setHudState(HUDState.IDLE); 
@@ -345,7 +378,7 @@ const App: React.FC = () => {
           <StatusBar role={user.role} onLogout={handleLogout} onSettings={() => setAdminPanelOpen(true)} latency={latency} />
           <div className="flex-1 relative flex flex-col items-center min-h-0 w-full">
             <div className="flex-[0_0_auto] py-4 sm:py-6 w-full flex items-center justify-center z-10"><HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} /></div>
-            <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4"><ChatPanel messages={chatLog} userRole={user.role} hudState={hudState} isAudioLoading={isAudioLoading} /></div>
+            <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4"><ChatPanel messages={chatLog} userRole={user.role} hudState={hudState} isAudioLoading={isAudioLoading} onTypingComplete={() => setIsTyping(false)} /></div>
           </div>
           <ControlDeck onMicClick={handleMicClick} hudState={hudState} />
           {user.role === UserRole.ADMIN && ( <AdminPanel isOpen={adminPanelOpen} onClose={() => setAdminPanelOpen(false)} config={config} onConfigChange={setConfig} onClearMemory={() => { setChatLog([]); memoryRef.current = []; if (user) localStorage.removeItem(`nexa_chat_${user.mobile}`); }} /> )}
