@@ -7,9 +7,10 @@ interface AdminPanelProps {
   config: AppConfig;
   onConfigChange: (newConfig: AppConfig) => void;
   onClearMemory: () => void;
+  onManageAccounts: () => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConfigChange, onClearMemory }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConfigChange, onClearMemory, onManageAccounts }) => {
   if (!isOpen) return null;
 
   const handleExportLogs = () => {
@@ -29,10 +30,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
   };
 
   return (
-    <div className="absolute top-16 right-4 w-72 bg-black/90 border border-nexa-cyan rounded-lg backdrop-blur-md p-4 z-50 shadow-[0_0_20px_rgba(41,223,255,0.3)]">
+    <div className="absolute top-16 right-4 w-72 bg-black/90 border border-nexa-cyan rounded-lg backdrop-blur-md p-4 z-50 shadow-[0_0_20px_rgba(41,223,255,0.3)] animate-fade-in">
       <div className="flex justify-between items-center mb-4 border-b border-zinc-800 pb-2">
         <h2 className="text-nexa-cyan font-mono text-sm tracking-wider">ADMIN CONTROL</h2>
-        <button onClick={onClose} className="text-zinc-500 hover:text-white">&times;</button>
+        <button onClick={onClose} className="text-zinc-500 hover:text-white text-2xl leading-none">&times;</button>
       </div>
 
       <div className="space-y-4">
@@ -57,6 +58,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
           >
             {config.animationsEnabled ? 'ENABLED' : 'DISABLED'}
           </button>
+          <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Toggles HUD rotation &amp; effects.</p>
         </div>
 
         <div className="pt-2 border-t border-zinc-800 space-y-2">
@@ -68,10 +70,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
            </button>
            
            <button 
-             className="w-full py-2 border border-zinc-700 text-zinc-500 cursor-not-allowed text-xs font-mono"
-             disabled
+             onClick={onManageAccounts}
+             className="w-full py-2 border border-zinc-700 text-zinc-400 hover:text-white hover:border-white text-xs font-mono transition-colors"
            >
-             MANAGE ACCOUNTS (LOCKED)
+             MANAGE USER DATA
            </button>
 
            <button 

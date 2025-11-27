@@ -285,7 +285,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                </div>
                
                <div className="space-y-4 relative z-20">
-                 <BracketInput name="username" placeholder="IDENTITY_ID" value={formData.username} onChange={handleChange} autoFocus variant="red" />
+                 <BracketInput name="username" placeholder="IDENTITY_ID" value={formData.username} onChange={handleChange} autoFocus variant="red" className="password-hidden" />
                  <BracketInput name="password" placeholder="ACCESS_KEY" type="password" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" />
                </div>
 

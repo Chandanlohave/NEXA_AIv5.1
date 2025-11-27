@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexa-cache-v4'; // Important: New version name
+const CACHE_NAME = 'nexa-cache-v6'; // Important: New version name
 const urlsToCache = [
   '/',
   '/index.html',
@@ -73,7 +73,7 @@ self.addEventListener('fetch', event => {
             return networkResponse;
           }
         ).catch(error => {
-          // Optional: You can return a custom offline page here if fetch fails.
+          // Optional: You can return a custom offline page here if available.
           console.log('Fetch failed; returning offline page if available.');
         });
       })

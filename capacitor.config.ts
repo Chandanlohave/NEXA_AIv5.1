@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: 'NEXA AI',
   webDir: 'dist',
   server: {
-    androidScheme: 'http'
+    hostname: 'nexa.local',
+    androidScheme: 'https'
   },
   plugins: {
     SplashScreen: {
