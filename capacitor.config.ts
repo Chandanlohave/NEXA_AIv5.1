@@ -4,9 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.chandan.nexa',
   appName: 'NEXA AI',
   webDir: 'dist',
-  server: {
-    androidScheme: 'https'
-  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 3000,
