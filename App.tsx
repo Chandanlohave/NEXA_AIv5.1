@@ -7,7 +7,7 @@ import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types
 import { generateTextResponse, generateSpeech, generateIntroductoryMessage } from './services/geminiService';
 
 // --- ICONS ---
-const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
+const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 const MicIcon = () => ( <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m-4-12v8m8-8v8m-12-5v2m16-2v2" /></svg> );
 
@@ -184,7 +184,7 @@ const App: React.FC = () => {
         setHudState(HUDState.IDLE);
         isProcessingRef.current = false;
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("TTS failed for system message, falling back to text-only:", e);
       setIsAudioLoading(false);
   
@@ -200,6 +200,7 @@ const App: React.FC = () => {
         text: `// Audio synthesis failed. Your API key might lack permissions for the Text-to-Speech model.`, 
         timestamp: Date.now() + 1 
       };
+
       memoryRef.current.push(audioFailMessage);
       saveMemory(currentUser);
       setChatLog(prev => [...prev, audioFailMessage]);
@@ -308,7 +309,7 @@ const App: React.FC = () => {
       } else if (error.message.includes("billing")) {
           detailedMessage = "The project's billing is not enabled, which is required for this model.";
       } else if (error.message.includes("permission denied")) {
-          detailedMessage = "The API Key lacks permission for the requested model.";
+          detailedMessage = "The API Key lacks permission for the requested model. Please ensure the 'Vertex AI API' is enabled in your Google Cloud project.";
       } else if (error.message.includes("404")) {
           detailedMessage = "The requested model was not found (404).";
       } else {

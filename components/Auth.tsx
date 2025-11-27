@@ -7,7 +7,7 @@ interface AuthProps {
 
 // --- HELPER COMPONENTS ---
 
-const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan' }: any) => {
+const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan', className = '' }: any) => {
   const colorClass = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan';
   const borderClass = variant === 'red' ? 'bg-red-500' : 'bg-nexa-cyan';
   const placeholderClass = variant === 'red' ? 'placeholder-red-500/20' : 'placeholder-nexa-cyan/20';
@@ -22,7 +22,7 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
           value={value}
           onChange={onChange}
           autoFocus={autoFocus}
-          className={`w-full bg-transparent border-none text-white text-center font-mono text-base focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-widest relative z-10`}
+          className={`w-full bg-transparent border-none text-white text-center font-mono text-base focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-widest relative z-10 ${className}`}
           placeholder={placeholder}
           autoComplete="off"
         />
@@ -286,7 +286,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                
                <div className="space-y-4 relative z-20">
                  <BracketInput name="username" placeholder="IDENTITY_ID" value={formData.username} onChange={handleChange} autoFocus variant="red" />
-                 <BracketInput name="password" placeholder="ACCESS_KEY" type="password" value={formData.password} onChange={handleChange} variant="red" />
+                 <BracketInput name="password" placeholder="ACCESS_KEY" type="password" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" />
                </div>
 
                <div className="pt-8 space-y-4 relative z-20">
