@@ -176,7 +176,6 @@ export const generateSpeech = async (text: string, role: UserRole, isAngry = fal
             return byteArray.buffer;
         }
         return null;
-    // FIX: Added curly braces to the catch block to fix a syntax error.
     } catch (error) {
         console.error("Gemini TTS Error:", error);
         throw error;

@@ -2,10 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='512' height='512' fill='black'/%3e%3cpath d='M139.636 416V96H224.909L372.364 301.091V96H416V416H330.727L183.273 210.909V416H139.636Z' fill='%2329DFFF'/%3e%3c/svg%3e" />
+    <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Google_Earth_icon.svg/1024px-Google_Earth_icon.svg.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="NEXA AI Assistant" />
+    <link rel="manifest" href="/manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -38,7 +39,6 @@
               'slide-up': 'slideUp 0.6s ease-out forwards',
               'scan': 'scanLine 3s linear infinite',
               'grid-move': 'gridMove 20s linear infinite',
-              'breathing': 'breathing 4s ease-in-out infinite',
             },
             keyframes: {
               'spin-reverse': {
@@ -64,10 +64,6 @@
               gridMove: {
                 '0%': { backgroundPosition: '0 0' },
                 '100%': { backgroundPosition: '0 100px' }
-              },
-              breathing: {
-                '0%, 100%': { transform: 'scale(1)', opacity: '0.7' },
-                '50%': { transform: 'scale(1.03)', opacity: '1' },
               }
             }
           }
@@ -131,15 +127,23 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+      
+      /* Explicitly hide password text */
+      input[type="password"] {
+        -webkit-text-security: disc;
+        text-security: disc;
+      }
     </style>
-<script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "@google/genai": "https://esm.sh/@google/genai",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "@google/generative-ai": "https://aistudiocdn.com/@google/generative-ai@^0.24.1",
     "vite": "https://aistudiocdn.com/vite@^7.2.4",
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
@@ -149,5 +153,17 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // PWA Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js').then(registration => {
+            console.log('SW registered: ', registration);
+          }).catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

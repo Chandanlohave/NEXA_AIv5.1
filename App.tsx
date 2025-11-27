@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
 import ChatPanel from './components/ChatPanel';
@@ -164,7 +164,7 @@ const App: React.FC = () => {
     setIsAudioLoading(true);
 
     try {
-      const audioBuffer = await generateSpeech(displayText.replace(/Lohave/gi, 'लोहवे'), currentUser.role);
+      const audioBuffer = await generateSpeech(displayText.replace(/Lohave/gi, 'लोह वे'), currentUser.role);
       setIsAudioLoading(false);
 
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
@@ -345,7 +345,7 @@ const App: React.FC = () => {
         memoryRef.current.push(modelMessage); saveMemory(user);
 
         setIsAudioLoading(true);
-        const audioBuffer = await generateSpeech(textForDisplay.replace(/Lohave/gi, 'लोहवे'), user.role, nextState === 'ANGRY');
+        const audioBuffer = await generateSpeech(textForDisplay.replace(/Lohave/gi, 'लोह वे'), user.role, nextState === 'ANGRY');
         setIsAudioLoading(false);
         
         if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
@@ -365,6 +365,10 @@ const App: React.FC = () => {
     } catch (e) { handleApiError(e, "Process Query"); }
   };
 
+  const handleTypingComplete = useCallback(() => {
+    setIsTyping(false);
+  }, []);
+
   // --- RENDER LOGIC ---
   if (systemStatus === 'unauthenticated') { return <Auth onLogin={handleLogin} />; }
   if (systemStatus === 'initializing') { return ( <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-nexa-cyan font-mono z-[100]"> <div className="relative w-32 h-32 flex items-center justify-center"><div className="absolute w-full h-full border-2 border-nexa-cyan rounded-full border-t-transparent animate-spin"></div><div className="text-2xl font-bold tracking-widest">NEXA</div></div><p className="mt-8 tracking-[0.3em] animate-pulse">CONNECTING TO CORE...</p></div> ); }
@@ -378,7 +382,7 @@ const App: React.FC = () => {
           <StatusBar role={user.role} onLogout={handleLogout} onSettings={() => setAdminPanelOpen(true)} latency={latency} />
           <div className="flex-1 relative flex flex-col items-center min-h-0 w-full">
             <div className="flex-[0_0_auto] py-4 sm:py-6 w-full flex items-center justify-center z-10"><HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} /></div>
-            <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4"><ChatPanel messages={chatLog} userRole={user.role} hudState={hudState} isAudioLoading={isAudioLoading} onTypingComplete={() => setIsTyping(false)} /></div>
+            <div className="flex-1 w-full min-h-0 relative z-20 px-4 pb-4"><ChatPanel messages={chatLog} userRole={user.role} hudState={hudState} isAudioLoading={isAudioLoading} onTypingComplete={handleTypingComplete} /></div>
           </div>
           <ControlDeck onMicClick={handleMicClick} hudState={hudState} />
           {user.role === UserRole.ADMIN && ( <AdminPanel isOpen={adminPanelOpen} onClose={() => setAdminPanelOpen(false)} config={config} onConfigChange={setConfig} onClearMemory={() => { setChatLog([]); memoryRef.current = []; if (user) localStorage.removeItem(`nexa_chat_${user.mobile}`); }} /> )}

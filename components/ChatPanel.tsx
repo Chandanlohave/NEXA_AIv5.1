@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { ChatMessage, UserRole, HUDState } from '../types';
 
 interface ChatPanelProps {
@@ -16,6 +16,7 @@ interface TypewriterProps {
 }
 
 const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate }) => {
+  const spanRef = useRef<HTMLSpanElement>(null);
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -23,13 +24,12 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
 
     const type = () => {
       if (index < text.length) {
-        // This is a direct DOM update, which is not ideal in React,
-        // but for a typewriter effect it's much more performant than state updates per character.
-        // We will set the final state once at the end.
         const currentText = text.substring(0, index + 1);
-        if(spanRef.current) spanRef.current.textContent = currentText;
+        if (spanRef.current) {
+          spanRef.current.textContent = currentText;
+        }
         index++;
-        onUpdate();
+        onUpdate(); // For scrolling
         const delay = 30 + (Math.random() * 25 - 10); // Human-like delay
         timeoutRef.current = window.setTimeout(type, delay);
       } else {
@@ -37,7 +37,11 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
       }
     };
     
-    const spanRef = React.createRef<HTMLSpanElement>();
+    // Ensure previous text is cleared before starting
+    if (spanRef.current) {
+      spanRef.current.textContent = "";
+    }
+
     type();
 
     return () => {
@@ -47,7 +51,6 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
     };
   }, [text, onComplete, onUpdate]);
   
-  const spanRef = React.createRef<HTMLSpanElement>();
   return <span ref={spanRef}></span>;
 };
 
@@ -55,18 +58,18 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
 const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USER, hudState, isAudioLoading, onTypingComplete }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
         behavior: 'smooth'
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, hudState]);
+  }, [messages, hudState, scrollToBottom]);
 
   const lastMessage = messages[messages.length - 1];
 
