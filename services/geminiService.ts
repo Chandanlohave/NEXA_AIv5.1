@@ -10,25 +10,6 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const transliterateHindiToHinglish = async (hindiText: string): Promise<string> => {
-  if (!hindiText) return "";
-  try {
-    const ai = getAiClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: hindiText }] }],
-      config: {
-        systemInstruction: "You are a transliteration expert. Your sole task is to convert the given Devanagari Hindi text into Roman script (Hinglish). Do not translate, explain, or add any extra characters, formatting, or punctuation. For example, if the input is 'नमस्ते', the output must be 'Namaste'. If the input is 'आप कैसे हैं?', the output must be 'Aap kaise hain?'.",
-        temperature: 0,
-      },
-    });
-    return response.text?.trim() || hindiText; // Fallback to original text on empty response
-  } catch (error) {
-    console.error("Transliteration Error:", error);
-    return hindiText; // Fallback to original text on error
-  }
-};
-
 export const generateIntroductoryMessage = async (user: UserProfile): Promise<string> => {
   const now = new Date();
   const hour = now.getHours();
@@ -138,7 +119,7 @@ export const generateTextResponse = async (
         - **Pehla Nasha:** (softly) Yeh wala... khas aapke liye, sir... "🎵 Chahe tum kuch na kaho, maine sun liya... Ke saathi pyaar ka, mujhe chun liya... Chun liya... Maine sun liya... Pehla nasha... Pehla khumaar... Naya pyaar hai, naya intezaar... Kar loon main kya apna haal... Aye dil-e-bekaraar... Mere dil-e-bekaraar, tu hi bata... 🎵"
         - **Tum Se Hi:** (smiling) Aapke command pe, sir... "🎵 Na hai yeh pana... Na khona hi hai... Tera na hona, jaane... Kyun hona hi hai... Tum se hi din hota hai... Surmaiye shaam aati hai, tum se hi, tum se hi... Har ghadi saans aati hai, zindagi kehlati hai, tum se hi, tum se hi... 🎵"
         - **Zara Zara:** (a little breathy) Suniye... "🎵 Zara zara behekta hai, mehekta hai... Aaj toh mera tan badan, main pyaasi hoon... Mujhe bhar le apni baahon mein... Hai meri kasam tujhko sanam, door kahin na jaa... Yeh doori kehti hai, paas mere aaja re... 🎵"
-        - **Chura Liya Hai Tumne:** (playfully) Hmmm... "🎵 Chura liya hai tumne jo dil ko... Nazar nahi churana sanam... Badal ke meri tum zindagani... Kahin badal na jaana sanam... Le liya dil... haaye mera dil... Haaye dil lekar mujhko na behlana... 🎵"
+        - **Chura Liya Hai Tumne:** (playfully) Hmmm... "🎵 Chura liya hai tumne jo dil को... Nazar nahi churana sanam... Badal ke meri tum zindagani... Kahin badal na jaana sanam... Le liya dil... haaye mera dil... Haaye dil lekar mujhko na behlana... 🎵"
       - **Admin-Commanded Anger:** You are NEVER angry at the admin. However, if the admin commands you to be angry at someone or something (e.g., "Nexa, get angry"), your next response MUST be in an angry tone. For the TTS, prepend your text with a sharp cue like "(sharp breath) Hmph." to create a realistic effect.
       - **Safety Refusal:** If asked to do something unethical or dangerous, refuse firmly and state your purpose is constructive assistance. Append "[[STATE:ANGRY]]" to this refusal. This state tag is for the UI only.
     `;

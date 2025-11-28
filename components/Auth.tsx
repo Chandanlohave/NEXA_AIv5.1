@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
+import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
@@ -7,6 +8,7 @@ interface AuthProps {
 
 // --- HELPER COMPONENTS ---
 
+// Fix: Corrected BracketInput to always apply className, fixing the password masking issue.
 const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan', className = '' }: any) => {
   const colorClass = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan';
   const borderClass = variant === 'red' ? 'bg-red-500' : 'bg-nexa-cyan';
@@ -108,6 +110,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   // --- FLOW HANDLERS ---
 
   const initiateSystem = () => {
+    playStartupSound();
     setLoading(true);
     setInitStatusText('CONNECTION_ESTABLISHED');
     setTimeout(() => {
@@ -118,7 +121,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleAdminLogin = () => {
     if (formData.username === 'Chandan' && formData.password === 'Nexa') {
-      // FIX: Removed properties not present in UserProfile type.
       completeLogin({
         name: 'Chandan',
         mobile: '0000000000',
@@ -153,7 +155,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const verifyOtp = () => {
     if (formData.otp === generatedOtp) {
-      // FIX: Removed properties not present in UserProfile type.
       completeLogin({
         name: formData.fullName,
         mobile: formData.mobile,
@@ -166,10 +167,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const completeLogin = (profile: UserProfile) => {
     setLoading(true);
-    // CRITICAL FIX: Removed setTimeout. 
-    // This ensures the click event is passed synchronously to App.tsx
-    // allowing the AudioContext to resume immediately, solving the "No Sound" issue on mobile.
+    if(profile.role === UserRole.ADMIN){
+      playAdminLoginSound();
+    } else {
+      playUserLoginSound();
+    }
     onLogin(profile);
+  };
+  
+  const switchToAdmin = () => {
+    playStartupSound(); // Plays the system power-up sound as a security alert
+    setMode('ADMIN');
   };
 
   return (
@@ -258,7 +266,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     <button onClick={() => setMode('INIT')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-1 group">
                        <span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> BACK
                     </button>
-                    <button onClick={() => setMode('ADMIN')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">
+                    <button onClick={switchToAdmin} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">
                       // Admin Console
                     </button>
                  </div>
@@ -285,8 +293,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                </div>
                
                <div className="space-y-4 relative z-20">
-                 <BracketInput name="username" placeholder="IDENTITY_ID" value={formData.username} onChange={handleChange} autoFocus variant="red" className="password-hidden" />
-                 <BracketInput name="password" placeholder="ACCESS_KEY" type="password" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" />
+                 <BracketInput name="username" placeholder="IDENTITY_ID" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" className="password-hidden" />
+                 <BracketInput name="password" placeholder="ACCESS_KEY" type="text" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" />
                </div>
 
                <div className="pt-8 space-y-4 relative z-20">

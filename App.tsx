@@ -1,15 +1,57 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
-import ChatPanel from './components/ChatPanel';
+import ChatPanel from './ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
-import { generateTextResponse, generateSpeech, generateIntroductoryMessage, transliterateHindiToHinglish } from './services/geminiService';
+import { generateTextResponse, generateSpeech, generateIntroductoryMessage } from './services/geminiService';
+import { playMicOnSound, playMicOffSound } from './services/audioService';
 
 // --- ICONS ---
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
-const MicIcon = () => ( <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m-4-12v8m8-8v8m-12-5v2m16-2v2" /></svg> );
+// New, image-accurate Arc Reactor Icon
+const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
+    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="coreGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+          <stop offset="0%" stopColor="#ffdd44" />
+          <stop offset="100%" stopColor="#ffcc00" />
+        </radialGradient>
+      </defs>
+
+      {/* Rotating Outer Segments - Yellow */}
+      <g style={{ transformOrigin: 'center', animation: `spin ${rotationDuration} linear infinite` }}>
+        <circle 
+          cx="12" 
+          cy="12" 
+          r="10"
+          stroke="#ffcc00" // nexa-yellow
+          strokeWidth="4"
+          strokeDasharray="5.85 2" // Creates 8 segments with gaps
+          transform="rotate(-11.25 12 12)" // Aligns segments to be symmetrical
+        />
+      </g>
+      
+      {/* Static Dark Divider Ring */}
+      <circle 
+        cx="12" 
+        cy="12" 
+        r="8" 
+        stroke="rgba(0,0,0,0.7)" 
+        strokeWidth="0.5" 
+      />
+      
+      {/* Static Inner Core - Yellow with Gradient */}
+      <circle 
+        cx="12" 
+        cy="12" 
+        r="7.75" 
+        fill="url(#coreGradient)" 
+      />
+    </svg>
+);
+
 
 // --- PRONUNCIATION FIX HELPER ---
 const prepareTextForSpeech = (text: string): string => {
@@ -23,22 +65,117 @@ const prepareTextForSpeech = (text: string): string => {
 
 // --- HELPER & STATE COMPONENTS ---
 const StatusBar = ({ role, onLogout, onSettings, latency }: any) => ( <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-nexa-cyan/10 bg-black/80 backdrop-blur-md z-40 relative"> <div className="flex items-center gap-4"><div className="flex flex-col items-start"><div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">System Online</div><div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div></div>{latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-nexa-cyan/60 border-l border-nexa-cyan/20 pl-4"> API LATENCY: <span className="text-white">{latency}ms</span></div>)}</div><div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div><div className="flex items-center gap-4">{role === UserRole.ADMIN && (<button onClick={onSettings} className="p-2 hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>)}<button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button></div></div> );
-const ControlDeck = ({ onMicClick, hudState }: any) => ( <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/90 to-transparent z-40 relative flex items-center justify-center pb-6"><div className="absolute bottom-0 w-full h-[1px] bg-nexa-cyan/30"></div><button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center transition-all duration-300 group ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'scale-110' : 'hover:scale-105 active:scale-95'} ${hudState === HUDState.IDLE ? 'animate-breathing' : ''}`}><div className={`absolute inset-0 bg-black border ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'border-nexa-red shadow-[0_0_30px_rgba(255,42,42,0.6)]' : 'border-nexa-cyan shadow-[0_0_20px_rgba(41,223,255,0.4)]'} transition-all duration-300`} style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></div><div className={`relative z-10 ${hudState === HUDState.LISTENING || hudState === HUDState.ANGRY ? 'text-nexa-red animate-pulse' : 'text-nexa-cyan group-hover:text-white'} transition-colors`}><MicIcon /></div></button></div> );
+// New ControlDeck matching the user's provided image
+const ControlDeck = ({ onMicClick, hudState }: any) => {
+    const isListening = hudState === HUDState.LISTENING;
+    const isAngry = hudState === HUDState.ANGRY;
+    const isThinking = hudState === HUDState.THINKING;
+    const isIdle = hudState === HUDState.IDLE;
+    const isSpeaking = hudState === HUDState.SPEAKING;
+
+    // Determine rotation duration based on state
+    let rotationDuration = '8s'; // Idle: Low
+    if (isThinking) {
+      rotationDuration = '2s'; // Thinking: Fast
+    } else if (isSpeaking || isListening) {
+      rotationDuration = '4s'; // Speaking/Listening: Medium
+    } else if (isAngry) {
+      rotationDuration = '1s'; // Angry: Very Fast
+    }
+    
+    const buttonScale = isListening || isAngry || isThinking ? 'scale-110' : 'hover:scale-105 active:scale-95';
+    const idleAnimation = isIdle ? 'animate-breathing' : '';
+  
+    let iconColorClass = 'text-nexa-cyan'; // This controls the GLOW color
+    let pulseClass = '';
+
+    if (isListening || isAngry) {
+      iconColorClass = 'text-nexa-red';
+      pulseClass = 'animate-pulse';
+    }
+    if (isThinking) {
+      iconColorClass = 'text-nexa-yellow';
+      pulseClass = 'animate-pulse';
+    }
+
+    return (
+      <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/80 to-transparent z-40 relative flex items-center justify-center">
+        
+        {/* Horizontal Line with Gap */}
+        <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4">
+          <div className="w-full h-full flex justify-between items-center">
+            <div className="flex-1 h-full bg-gradient-to-r from-transparent via-nexa-cyan/20 to-nexa-cyan/40"></div>
+            <div className="w-24 flex-shrink-0"></div> {/* Gap for button */}
+            <div className="flex-1 h-full bg-gradient-to-l from-transparent via-nexa-cyan/20 to-nexa-cyan/40"></div>
+          </div>
+        </div>
+
+        <button 
+          onClick={onMicClick} 
+          className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${idleAnimation}`}
+        >
+          <div className={`absolute inset-0 rounded-full bg-black`}></div>
+          <div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}>
+            <div className="scale-[1.4]"> {/* Scale icon to be larger within the button */}
+              <MicIcon rotationDuration={rotationDuration} />
+            </div>
+          </div>
+        </button>
+      </div>
+    );
+  };
 const pcmToAudioBuffer = (pcmData: ArrayBuffer, context: AudioContext): AudioBuffer => { const int16Array = new Int16Array(pcmData); const float32Array = new Float32Array(int16Array.length); for (let i = 0; i < int16Array.length; i++) { float32Array[i] = int16Array[i] / 32768; } const buffer = context.createBuffer(1, float32Array.length, 24000); buffer.getChannelData(0).set(float32Array); return buffer; };
 
 type SystemStatus = 'unauthenticated' | 'initializing' | 'ready' | 'error';
-type ConfirmationModalProps = { isOpen: boolean; title: string; message: string; onConfirm: () => void; };
+type ConfirmationModalProps = {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  confirmationWord?: string;
+};
 
-const ConfirmationModal: React.FC<ConfirmationModalProps & { onClose: () => void }> = ({ isOpen, title, message, onConfirm, onClose }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps & { onClose: () => void }> = ({ isOpen, title, message, onConfirm, onClose, confirmationWord }) => {
+  const [inputValue, setInputValue] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setInputValue(''); // Reset input when modal opens
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const isConfirmDisabled = confirmationWord ? inputValue !== confirmationWord : false;
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-sm bg-black border-2 border-red-500/50 p-6 shadow-[0_0_30px_rgba(255,42,42,0.4)]">
         <h2 className="text-red-500 text-lg font-bold tracking-widest font-mono">{title}</h2>
         <p className="text-zinc-300 mt-4 font-sans leading-relaxed">{message}</p>
+        
+        {confirmationWord && (
+          <div className="mt-6">
+            <p className="text-xs text-center text-zinc-400 font-mono mb-2">To confirm, type "{confirmationWord}" below.</p>
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value.toUpperCase())}
+              className="w-full bg-red-900/20 border border-red-500/50 text-white text-center font-mono tracking-[0.3em] py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              autoFocus
+            />
+          </div>
+        )}
+
         <div className="flex justify-end gap-4 mt-8">
           <button onClick={onClose} className="text-zinc-400 hover:text-white font-bold tracking-wider transition-colors">CANCEL</button>
-          <button onClick={onConfirm} className="bg-red-600 text-white font-bold tracking-widest py-2 px-6 hover:bg-red-500 transition-colors">CONFIRM</button>
+          <button 
+            onClick={onConfirm} 
+            disabled={isConfirmDisabled}
+            className={`bg-red-600 text-white font-bold tracking-widest py-2 px-6 transition-colors ${isConfirmDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500'}`}
+          >
+            CONFIRM
+          </button>
         </div>
       </div>
     </div>
@@ -49,48 +186,40 @@ const AccountManager: React.FC<{ isOpen: boolean, onClose: () => void, onDeleteU
     const [users, setUsers] = useState<UserProfile[]>([]);
 
     useEffect(() => {
-        if (isOpen) {
-            const loadedUsers: UserProfile[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('nexa_user_')) {
-                    try {
-                        const user = JSON.parse(localStorage.getItem(key)!);
-                        // A simple check to ensure it's a valid user profile object
-                        if (user && user.name && user.mobile && user.role) {
-                            loadedUsers.push(user);
-                        }
-                    } catch (e) {
-                        console.error(`Failed to parse user data for key: ${key}`, e);
-                    }
-                }
-            }
-            // Add the currently logged-in admin to the list if they aren't already there from a `nexa_user_` key
+      if (isOpen) {
+        const profiles: { [mobile: string]: UserProfile } = {};
+        // 1. Load all known user profiles into a map for easy lookup.
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('nexa_user_')) {
             try {
-                const adminUser = JSON.parse(localStorage.getItem('nexa_user')!);
-                if (adminUser && adminUser.role === UserRole.ADMIN && !loadedUsers.some(u => u.mobile === adminUser.mobile)) {
-                   // This logic is flawed because we store all users under one key 'nexa_user'.
-                   // A better approach would be to scan chat history keys.
-                }
-            } catch(e) {}
-
-            const chatHistories: UserProfile[] = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if(key && key.startsWith('nexa_chat_')) {
-                    // Try to find the corresponding user profile to get the name.
-                    // This is inefficient. A better DB structure is needed for a real app.
-                    // For now, we will just show the mobile number.
-                    const mobile = key.replace('nexa_chat_', '');
-                    // Let's find the user profile.
-                     const userProfile = users.find(u => u.mobile === mobile) ?? { name: 'Unknown User', mobile, role: UserRole.USER };
-                     if(!chatHistories.some(u => u.mobile === mobile)){
-                       chatHistories.push(userProfile);
-                     }
-                }
+              const user = JSON.parse(localStorage.getItem(key)!);
+              if (user && user.mobile) {
+                profiles[user.mobile] = user;
+              }
+            } catch (e) {
+              console.error(`Failed to parse user data for key: ${key}`, e);
             }
-             setUsers(chatHistories);
+          }
         }
+  
+        // 2. Find all unique chat histories.
+        const usersWithHistory: UserProfile[] = [];
+        const foundMobiles = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('nexa_chat_')) {
+            const mobile = key.replace('nexa_chat_', '');
+            if (!foundMobiles.has(mobile)) {
+              // Use the profile from our map, or create a default one.
+              const userProfile = profiles[mobile] ?? { name: `User ${mobile.slice(-4)}`, mobile, role: UserRole.USER };
+              usersWithHistory.push(userProfile);
+              foundMobiles.add(mobile);
+            }
+          }
+        }
+        setUsers(usersWithHistory);
+      }
     }, [isOpen]);
 
     if (!isOpen) return null;
@@ -175,17 +304,18 @@ const App: React.FC = () => {
     }
   }, [systemStatus, pendingIntro, user]);
 
-  // This effect transitions the system back to IDLE once both speaking and typing are complete.
+  // This effect is the primary mechanism for resetting the AI's state after a response.
+  // It waits for both typing and audio to finish, then resets the processing flag and UI state.
   useEffect(() => {
-    if (!isTyping && !isAudioPlaying && isProcessingRef.current) {
-      if (hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY) {
-        setHudState(HUDState.IDLE);
-        isProcessingRef.current = false;
-      }
+    // If a process was running, and both typing and audio playback have completed,
+    // then the process is finished. This is the definitive end of a turn.
+    if (isProcessingRef.current && !isTyping && !isAudioPlaying) {
+      setHudState(HUDState.IDLE);
+      isProcessingRef.current = false;
     }
-  }, [isTyping, isAudioPlaying, hudState]);
+  }, [isTyping, isAudioPlaying]);
 
-  const loadMemory = (mobile: string) => { const history = localStorage.getItem(`nexa_chat_${mobile}`); if (history) { try { memoryRef.current = JSON.parse(history); } catch (e) { console.error("Failed to parse chat history", e); memoryRef.current = []; } } else { memoryRef.current = []; } };
+
   const saveMemory = (currentUser: UserProfile | null) => { if (currentUser) localStorage.setItem(`nexa_chat_${currentUser.mobile}`, JSON.stringify(memoryRef.current)); };
   const getAudioContext = () => { if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(); return audioContextRef.current; };
   const unlockAudioContext = () => { const ctx = getAudioContext(); if (ctx.state === 'suspended') { ctx.resume().then(() => { try { const source = ctx.createBufferSource(); source.buffer = ctx.createBuffer(1, 1, 22050); source.connect(ctx.destination); source.start(0); } catch(e) { console.warn("Audio unlock failed", e); } }); } };
@@ -195,10 +325,15 @@ const App: React.FC = () => {
     setUser(profile);
     setSystemStatus('initializing');
     localStorage.setItem('nexa_user', JSON.stringify(profile));
-    // Also save a user-specific key for the account manager to find
     localStorage.setItem(`nexa_user_${profile.mobile}`, JSON.stringify(profile));
-    loadMemory(profile.mobile);
+
+    // --- SECURE SESSION FIX (PERMANENT) ---
+    // This is the definitive fix for the chat history bug. On every login,
+    // we forcefully wipe all traces of the previous conversation.
+    memoryRef.current = [];
     setChatLog([]);
+    localStorage.removeItem(`nexa_chat_${profile.mobile}`);
+    
     setPendingIntro(null);
   
     try {
@@ -224,8 +359,12 @@ const App: React.FC = () => {
       }
       
       setSystemStatus('ready');
-      if (memoryRef.current.length === 0) { setPendingIntro(dynamicIntro); } 
-      else { setHudState(HUDState.IDLE); }
+      // This condition is now always true on login, ensuring the intro is always played.
+      if (memoryRef.current.length === 0) { 
+        setPendingIntro(dynamicIntro); 
+      } else { 
+        setHudState(HUDState.IDLE); 
+      }
 
     } catch (e: any) {
       console.error("Initialization Error:", e);
@@ -233,14 +372,47 @@ const App: React.FC = () => {
       
       let friendlyError = 'Connection to NEXA Core failed. Please try again.';
       if (errorMessageString.includes('API_KEY_MISSING')) { friendlyError = 'SYSTEM OFFLINE: API Key not found. Ensure it is configured correctly in the Google AI Studio environment.'; } 
-      else if (errorMessageString.includes('404')) { friendlyError = 'SYSTEM OFFLINE: The required AI model was not found. The system configuration may be outdated.'; }
+      else if (errorMessageString.includes('404')) { friendlyError = 'SYSTEM OFFLLINE: The required AI model was not found. The system configuration may be outdated.'; }
       else if (errorMessageString.toLowerCase().includes('failed to fetch')) { friendlyError = 'NETWORK ERROR: Cannot connect to NEXA systems. Please check your internet connection.'; }
       setSystemError(friendlyError);
       setSystemStatus('error');
     }
   };
 
-  const handleLogout = () => { setUser(null); setSystemStatus('unauthenticated'); localStorage.removeItem('nexa_user'); setChatLog([]); memoryRef.current = []; setHudState(HUDState.IDLE); setPendingIntro(null); };
+  const handleLogout = () => {
+    // 1. Immediately signal to all async processes to stop.
+    isProcessingRef.current = false;
+
+    // 2. Stop any speech recognition in progress.
+    if (recognitionRef.current) {
+        recognitionRef.current.abort();
+        recognitionRef.current = null;
+    }
+    if (listeningTimeoutRef.current) {
+        clearTimeout(listeningTimeoutRef.current);
+        listeningTimeoutRef.current = null;
+    }
+
+    // 3. Stop any audio currently playing.
+    if (currentAudioSourceRef.current) {
+        currentAudioSourceRef.current.onended = null; // Prevent onEnd callback from firing
+        currentAudioSourceRef.current.stop();
+        currentAudioSourceRef.current = null;
+    }
+    
+    // 4. Reset all state for the new session.
+    setUser(null);
+    setSystemStatus('unauthenticated');
+    localStorage.removeItem('nexa_user');
+    setChatLog([]);
+    memoryRef.current = [];
+    setHudState(HUDState.IDLE);
+    setPendingIntro(null);
+    setIsAudioLoading(false);
+    setIsTyping(false);
+    setIsAudioPlaying(false);
+    setLatency(null);
+};
   
   const playAudio = (buffer: ArrayBuffer, onEndCallback: () => void) => {
     if (!isProcessingRef.current) return;
@@ -274,11 +446,12 @@ const App: React.FC = () => {
       const audioBuffer = await generateSpeech(textForSpeech, currentUser.role);
       setIsAudioLoading(false);
 
+      if (!isProcessingRef.current) return; // <-- CRITICAL FIX: Check after async operation
+
       const modelMessage: ChatMessage = { role: 'model', text: displayText, timestamp: Date.now() };
       memoryRef.current.push(modelMessage);
       saveMemory(currentUser);
 
-      if (!isProcessingRef.current) return;
 
       if (audioBuffer) {
         setHudState(HUDState.SPEAKING);
@@ -321,6 +494,7 @@ const App: React.FC = () => {
     unlockAudioContext();
     
     if (isProcessingRef.current) {
+      playMicOffSound();
       isProcessingRef.current = false;
       recognitionRef.current?.abort();
       if (currentAudioSourceRef.current) {
@@ -348,10 +522,12 @@ const App: React.FC = () => {
         recognition.lang = 'hi-IN';
   
         recognition.onstart = () => {
+          playMicOnSound();
           setHudState(HUDState.LISTENING);
         };
   
         recognition.onend = () => {
+          playMicOffSound();
           if (listeningTimeoutRef.current) {
             clearTimeout(listeningTimeoutRef.current);
             listeningTimeoutRef.current = null;
@@ -382,21 +558,14 @@ const App: React.FC = () => {
             clearTimeout(listeningTimeoutRef.current);
             listeningTimeoutRef.current = null;
           }
-          const transcript = event.results?.[0]?.[0]?.transcript;
-
-          const handleTransliteration = async (hindiText: string) => {
-              setHudState(HUDState.THINKING);
-              try {
-                  const hinglishText = await transliterateHindiToHinglish(hindiText);
-                  processQuery(hinglishText);
-              } catch (e) {
-                  console.error("Transliteration failed, using original script.", e);
-                  processQuery(hindiText); // Fallback to original Devanagari
-              }
-          };
+          const transcript = event.results?.[0]?.[0]?.transcript?.trim();
 
           if (transcript && !isProcessingRef.current) {
-            handleTransliteration(transcript);
+            // Simple fix for common "Nexa" misrecognition.
+            const correctedTranscript = transcript.replace(/alexa/gi, 'Nexa').replace(/naksha/gi, 'Nexa');
+            // Directly process the query without transliteration to reduce API calls
+            setHudState(HUDState.THINKING);
+            processQuery(correctedTranscript);
           } else if (!isProcessingRef.current) {
             console.warn("Speech recognition got a result, but the transcript was empty.");
             const errorMessage: ChatMessage = { role: 'model', text: `// MIC INFO: I heard something, but couldn't make it out. Please try again.`, timestamp: Date.now() };
@@ -431,12 +600,14 @@ const App: React.FC = () => {
           detailedMessage = "The API Key lacks permission for the requested model. Please ensure the 'Vertex AI API' is enabled in your Google Cloud project.";
       } else if (error.message.includes("404")) {
           detailedMessage = "The requested model was not found (404).";
+      } else if (error.message.includes("API_KEY_MISSING")) {
+          detailedMessage = "API Key not found. Ensure it is configured correctly.";
       } else {
           detailedMessage = error.message.length > 150 ? error.message.substring(0, 150) + '...' : error.message;
       }
     }
     
-    const errorMessage: ChatMessage = { role: 'model', text: `SYSTEM ERROR: ${detailedMessage} [Context: ${context}]`, timestamp: Date.now() };
+    const errorMessage: ChatMessage = { role: 'model', text: `SYSTEM ERROR: Failed to call the Gemini API. Please try again.`, timestamp: Date.now() };
     setChatLog(prev => [...prev, errorMessage]);
     setHudState(HUDState.IDLE);
     isProcessingRef.current = false;
@@ -456,20 +627,20 @@ const App: React.FC = () => {
         const rawAiResponse = await generateTextResponse(text, user, historyForApi);
         setLatency(Math.round(performance.now() - startTime));
         
-        if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
+        if (!isProcessingRef.current) { return; }
         
         const stateMatch = rawAiResponse.match(/\[\[STATE:(.*?)\]\]/); const nextState = stateMatch ? stateMatch[1] : null; if(nextState === 'ANGRY') { setHudState(HUDState.ANGRY); navigator.vibrate?.([100, 50, 100]); }
         
-        const textForDisplay = rawAiResponse.replace(/\[\[.*?\]\]/g, '').trim();
+        const textForDisplay = rawAiResponse.replace(/\[\[.*?\]\]/g, '').replace(/^\(.*\)\s*/, '').trim();
         const modelMessage: ChatMessage = { role: 'model', text: textForDisplay, timestamp: Date.now(), isAngry: nextState === 'ANGRY' };
         memoryRef.current.push(modelMessage); saveMemory(user);
 
         setIsAudioLoading(true);
-        const textForSpeech = prepareTextForSpeech(textForDisplay);
+        const textForSpeech = prepareTextForSpeech(rawAiResponse); // Use raw response for TTS to get tone
         const audioBuffer = await generateSpeech(textForSpeech, user.role, nextState === 'ANGRY');
         setIsAudioLoading(false);
         
-        if (!isProcessingRef.current) { isProcessingRef.current = false; return; }
+        if (!isProcessingRef.current) { return; } // <-- CRITICAL FIX: Check after async operation
         
         if (audioBuffer) { 
           const finalState = nextState === 'ANGRY' ? HUDState.ANGRY : HUDState.SPEAKING;
@@ -494,7 +665,8 @@ const App: React.FC = () => {
     setConfirmationProps({
       isOpen: true,
       title: 'CONFIRM MEMORY PURGE',
-      message: 'This action is irreversible and will delete your entire conversation history. Are you sure you want to proceed?',
+      message: 'This action is irreversible and will delete your entire conversation history.',
+      confirmationWord: 'PURGE',
       onConfirm: () => {
         setChatLog([]);
         memoryRef.current = [];
@@ -537,6 +709,7 @@ const App: React.FC = () => {
         isOpen={!!confirmationProps}
         title={confirmationProps?.title || ''}
         message={confirmationProps?.message || ''}
+        confirmationWord={confirmationProps?.confirmationWord}
         onConfirm={() => confirmationProps?.onConfirm()}
         onClose={() => setConfirmationProps(null)}
       />

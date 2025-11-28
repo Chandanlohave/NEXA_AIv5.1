@@ -39,6 +39,7 @@
               'slide-up': 'slideUp 0.6s ease-out forwards',
               'scan': 'scanLine 3s linear infinite',
               'grid-move': 'gridMove 20s linear infinite',
+              'breathing': 'breathing 2.5s ease-in-out infinite',
             },
             keyframes: {
               'spin-reverse': {
@@ -64,6 +65,10 @@
               gridMove: {
                 '0%': { backgroundPosition: '0 0' },
                 '100%': { backgroundPosition: '0 100px' }
+              },
+              breathing: {
+                '0%, 100%': { transform: 'scale(1)' },
+                '50%': { transform: 'scale(0.97)' },
               }
             }
           }
@@ -128,22 +133,12 @@
         scrollbar-width: none;
       }
       
-      /* Explicitly hide password text */
-      input[type="password"] {
+      .password-hidden {
         -webkit-text-security: disc;
         text-security: disc;
       }
-      
-      /* High-security invisible password field */
-      .password-hidden, .password-hidden:focus {
-        -webkit-text-security: none !important;
-        text-security: none !important;
-        color: transparent !important;
-        text-shadow: none !important;
-        caret-color: #ef4444; /* Admin theme red */
-      }
     </style>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
@@ -159,7 +154,7 @@
   }
 }
 </script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
