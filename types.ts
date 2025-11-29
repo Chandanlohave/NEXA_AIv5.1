@@ -27,4 +27,5 @@ export enum HUDState {
 export interface AppConfig {
   animationsEnabled: boolean;
   hudRotationSpeed: number;
+  micRotationSpeed: number;
 }

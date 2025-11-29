@@ -51,6 +51,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
         </div>
 
         <div>
+          <label className="block text-zinc-400 text-xs font-mono mb-1">Mic Rotation Speed</label>
+          <input 
+            type="range" 
+            min="0.2" 
+            max="5" 
+            step="0.1"
+            value={config.micRotationSpeed || 1}
+            onChange={(e) => onConfigChange({...config, micRotationSpeed: parseFloat(e.target.value)})}
+            className="w-full accent-nexa-cyan" 
+          />
+        </div>
+
+        <div>
           <label className="block text-zinc-400 text-xs font-mono mb-1">Animations</label>
           <button 
             onClick={() => onConfigChange({...config, animationsEnabled: !config.animationsEnabled})}

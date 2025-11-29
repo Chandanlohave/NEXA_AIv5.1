@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexa-cache-v6'; // Important: New version name
+const CACHE_NAME = 'nexa-cache-v7'; // Important: New version name
 const urlsToCache = [
   '/',
   '/index.html',
