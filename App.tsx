@@ -138,25 +138,17 @@ const App: React.FC = () => {
         }
         const introText = await generateIntroductoryMessage(user, briefing);
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
-        appendMessageToMemory(user, introMsg); // Store the intended message first
         
         let audioBuffer: AudioBuffer | null = null;
-        let finalMessages: ChatMessage[] = [introMsg];
-
         try {
             const audioData = await generateSpeech(prepareTextForSpeech(introText));
             if (audioData && audioContextRef.current) {
                 audioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
             }
-        } catch (e: any) {
-            console.error("Intro Audio Fetch Error:", e);
-            const errorText = getHumanReadableError(e);
-            const errorMsg: ChatMessage = { role: 'model', text: `SYSTEM ALERT: Initialization failed.\n${errorText}`, timestamp: Date.now(), isAngry: true };
-            appendMessageToMemory(user, errorMsg);
-            finalMessages.push(errorMsg);
-        }
+        } catch (e) { console.error("Intro Audio Fetch Error", e); }
         
-        setMessages(finalMessages);
+        appendMessageToMemory(user, introMsg);
+        setMessages([introMsg]);
 
         if(audioBuffer) {
           setHudState(HUDState.SPEAKING);
@@ -198,18 +190,6 @@ const App: React.FC = () => {
     } else {
       setIsUserSettingsOpen(true);
     }
-  };
-
-  const getHumanReadableError = (error: any): string => {
-    if (error && error.message) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes('api key not valid')) return "The API Key is not valid. Please check deployment settings.";
-      if (msg.includes('billing')) return "There is a billing issue with the API Key account.";
-      if (msg.includes('quota')) return "API quota exceeded. Please check usage limits.";
-      if (msg.includes('candidate was blocked')) return "The response was blocked by safety filters.";
-      return `An unexpected error occurred: ${error.message.substring(0, 100)}`;
-    }
-    return "An unknown internal error occurred.";
   };
 
   const processInput = async (text: string, isSecondPass: boolean = false) => {
@@ -288,10 +268,8 @@ const App: React.FC = () => {
     } catch (error: any) {
         console.error("Processing Error", error);
         setHudState(HUDState.IDLE); playErrorSound();
-        const errorText = getHumanReadableError(error);
-        const errorMsg: ChatMessage = { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true };
-        appendMessageToMemory(user, errorMsg);
-        setMessages(prev => [...prev, errorMsg]);
+        const errorText = (error.message?.includes('API_KEY')) ? "SYSTEM ALERT: API Access Key invalid or missing." : "I encountered an internal error.";
+        setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
     } finally {
         isProcessingRef.current = false;
     }
