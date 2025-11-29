@@ -3,6 +3,7 @@ import Auth from './components/Auth';
 import HUD from './components/HUD';
 import ChatPanel from './ChatPanel';
 import AdminPanel from './components/AdminPanel';
+import ConfigError from './components/ConfigError';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
 import { generateTextResponse, generateSpeech, generateIntroductoryMessage } from './services/geminiService';
 import { playMicOnSound, playMicOffSound, playErrorSound, playStartupSound } from './services/audioService';
@@ -205,13 +206,23 @@ const App: React.FC = () => {
   });
   const [latency, setLatency] = useState<number | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [isKeyValid, setIsKeyValid] = useState<boolean | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const activeAudioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const chatHistoryRef = useRef<{role: string, parts: {text: string}[]}[]>([]);
 
-  // Init Audio Context for playback
+  // Init Audio Context & API Key Check
   useEffect(() => {
+    // Check for API Key on initial load
+    const apiKey = process.env.API_KEY;
+    if (apiKey && apiKey.length > 10) { // Basic check for presence and some length
+      setIsKeyValid(true);
+    } else {
+      setIsKeyValid(false);
+    }
+
     const initAudioContext = () => {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -219,21 +230,17 @@ const App: React.FC = () => {
     };
     window.addEventListener('click', initAudioContext, { once: true });
     
-    // Check local storage for persistent login
     const savedUser = localStorage.getItem('nexa_user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
     
-    // Load config
     const savedConfig = localStorage.getItem('nexa_config');
     if (savedConfig) {
-        // Ensure merged defaults for new keys like micRotationSpeed
         const parsed = JSON.parse(savedConfig);
         setConfig(prev => ({ ...prev, ...parsed }));
     }
     
-    // Admin Notifications Init
     if (!localStorage.getItem('nexa_admin_notifications')) {
         localStorage.setItem('nexa_admin_notifications', '[]');
     }
@@ -250,44 +257,34 @@ const App: React.FC = () => {
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
-      
-      // CRITICAL: Force 'en-IN' to prefer Roman characters (Hinglish) over Devanagari script
       recognitionRef.current.lang = 'en-IN'; 
-
       recognitionRef.current.onstart = () => {
         playMicOnSound();
         setHudState(HUDState.LISTENING);
       };
-
       recognitionRef.current.onend = () => {
-        // Only go back to IDLE if we aren't about to process (THINKING)
-        // Wait a tick to check state, though standard flow handles this in onresult
+        if (hudState === HUDState.LISTENING) {
+          setHudState(HUDState.IDLE);
+        }
       };
-
       recognitionRef.current.onError = (event: any) => {
         console.error("Speech Error", event);
         setHudState(HUDState.IDLE);
         playErrorSound();
       };
-
       recognitionRef.current.onresult = async (event: any) => {
         playMicOffSound();
         let transcript = event.results[0][0].transcript;
-        
         if (transcript.trim()) {
-           // --- HINGLISH & NEXA CORRECTION LAYER ---
-           // 1. Fix common "Nexa" mishearings
            transcript = transcript.replace(/naksha|naks|next a|neck sa|naxa/gi, 'Nexa');
-           // 2. Just in case 'en-IN' failed and returned Hindi script 'नक्शा'
            transcript = transcript.replace(/नक्शा/g, 'Nexa');
-           
            await processInput(transcript);
         } else {
            setHudState(HUDState.IDLE);
         }
       };
     }
-  }, [user]); // Re-init if user changes (though usually not needed, keeping dependency clean)
+  }, [user]);
 
   // Welcome Message
   useEffect(() => {
@@ -296,7 +293,6 @@ const App: React.FC = () => {
         setHudState(HUDState.THINKING);
         const introText = await generateIntroductoryMessage(user);
         
-        // --- SYNC FIX: Pre-fetch audio BEFORE showing text/changing state ---
         let audioBuffer: AudioBuffer | null = null;
         try {
             const phoneticText = prepareTextForSpeech(introText);
@@ -308,10 +304,9 @@ const App: React.FC = () => {
             console.error("Intro Audio Fetch Error", e);
         }
 
-        // Now update UI and Play simultaneously
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         setMessages([introMsg]);
-        setHudState(HUDState.SPEAKING); // Start speaking animation
+        setHudState(HUDState.SPEAKING);
         
         if (audioBuffer) {
              await playAudioBuffer(audioBuffer);
@@ -339,17 +334,16 @@ const App: React.FC = () => {
     if (hudState === HUDState.LISTENING) {
       recognitionRef.current?.stop();
     } else if (hudState === HUDState.IDLE || hudState === HUDState.SPEAKING) {
-      // Stop any current audio
-      if (audioContextRef.current) {
-        audioContextRef.current.close().then(() => {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        });
-      }
+      activeAudioSourcesRef.current.forEach(source => {
+        try { source.stop(); } catch (e) { /* Fails if already stopped */ }
+      });
+      activeAudioSourcesRef.current.clear();
+      
       try {
           recognitionRef.current?.start();
       } catch (e) {
           console.error("Mic Start Error", e);
-          // Sometimes start() throws if already started
+          setHudState(HUDState.IDLE);
       }
     }
   };
@@ -357,7 +351,6 @@ const App: React.FC = () => {
   const processInput = async (text: string) => {
     if (!user) return;
     
-    // Add User Message
     const userMsg: ChatMessage = { role: 'user', text: text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     setHudState(HUDState.THINKING);
@@ -365,21 +358,17 @@ const App: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      // 1. Generate Text Response
       const responseText = await generateTextResponse(text, user, chatHistoryRef.current);
       const endTime = Date.now();
       setLatency(endTime - startTime);
       
-      // Update Chat History (limit context to last 10 turns)
       chatHistoryRef.current.push({ role: 'user', parts: [{ text: text }] });
       chatHistoryRef.current.push({ role: 'model', parts: [{ text: responseText }] });
       if (chatHistoryRef.current.length > 20) chatHistoryRef.current = chatHistoryRef.current.slice(-20);
 
-      // 2. Check for Angry State
       const isAngry = responseText.includes("[[STATE:ANGRY]]") || responseText.includes("(sharp tone)") || responseText.includes("Hmph");
       const cleanText = responseText.replace("[[STATE:ANGRY]]", "").trim();
       
-      // --- SYNC FIX: Generate Audio BEFORE showing text/changing state ---
       let audioBuffer: AudioBuffer | null = null;
       try {
           const phoneticText = prepareTextForSpeech(cleanText);
@@ -391,19 +380,18 @@ const App: React.FC = () => {
           console.error("Response Audio Fetch Error", e);
       }
 
-      // 3. Add Model Message (Now that audio is ready)
       const modelMsg: ChatMessage = { role: 'model', text: cleanText, timestamp: Date.now(), isAngry };
       setMessages(prev => [...prev, modelMsg]);
 
-      // 4. Play Audio
       setHudState(isAngry ? HUDState.ANGRY : HUDState.SPEAKING);
       
       if (audioBuffer) {
            await playAudioBuffer(audioBuffer);
       }
       
-      // Reset State
-      setHudState(HUDState.IDLE);
+      if (activeAudioSourcesRef.current.size === 0) {
+        setHudState(HUDState.IDLE);
+      }
 
     } catch (error: any) {
       console.error("Processing Error", error);
@@ -411,9 +399,8 @@ const App: React.FC = () => {
       setHudState(HUDState.IDLE);
       playErrorSound();
       
-      let errorText = "I encountered an internal error.";
+      let errorText = "I encountered an internal error. There was an unexpected error. Finish what you were doing.";
       
-      // DEPLOYMENT FRIENDLY ERROR HANDLING
       if (error.message && (error.message.includes('API_KEY') || error.message.includes('400') || error.message.includes('403'))) {
          errorText = "SYSTEM ALERT: API Access Key invalid or missing. Please check your deployment environment variables.";
       }
@@ -424,13 +411,24 @@ const App: React.FC = () => {
 
   const playAudioBuffer = async (buffer: AudioBuffer) => {
     if (!audioContextRef.current) return;
+
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+    
     try {
         const source = audioContextRef.current.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContextRef.current.destination);
+        activeAudioSourcesRef.current.add(source);
+        
         source.start(0);
+        
         return new Promise<void>((resolve) => {
-            source.onended = () => resolve();
+            source.onended = () => {
+                activeAudioSourcesRef.current.delete(source);
+                resolve();
+            };
         });
     } catch (e) {
         console.error("Buffer Playback Error", e);
@@ -439,19 +437,25 @@ const App: React.FC = () => {
 
   // --- RENDER ---
   
+  if (isKeyValid === null) {
+    return <div className="w-full h-full bg-black"></div>; // Blank screen while checking key
+  }
+
+  if (!isKeyValid) {
+    return <ConfigError />;
+  }
+
   if (!user) {
     return <Auth onLogin={handleLogin} />;
   }
 
   return (
-    <div className="relative w-full h-screen bg-black flex flex-col overflow-hidden font-sans select-none">
+    <div className="relative w-full h-full bg-black flex flex-col overflow-hidden font-sans select-none">
       
-      {/* --- GLOBAL EFFECTS --- */}
       <div className="perspective-grid"></div>
       <div className="vignette"></div>
       <div className="scanlines"></div>
 
-      {/* --- LAYOUT --- */}
       <StatusBar 
          role={user.role} 
          onLogout={handleLogout} 
@@ -461,12 +465,10 @@ const App: React.FC = () => {
 
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
         
-        {/* UPPER SECTION: HUD */}
         <div className="flex-[0.45] flex items-center justify-center min-h-[250px] relative">
            <HUD state={hudState} rotationSpeed={config.hudRotationSpeed} />
         </div>
 
-        {/* MIDDLE SECTION: CHAT */}
         <div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden">
            <ChatPanel 
              messages={messages} 
@@ -479,14 +481,12 @@ const App: React.FC = () => {
 
       </div>
       
-      {/* BOTTOM SECTION: CONTROLS */}
       <ControlDeck 
         onMicClick={handleMicClick} 
         hudState={hudState} 
         rotationSpeedMultiplier={config.micRotationSpeed || 1} 
       />
 
-      {/* --- MODALS --- */}
       <AdminPanel 
         isOpen={isAdminPanelOpen} 
         onClose={() => setIsAdminPanelOpen(false)}
@@ -507,9 +507,7 @@ const App: React.FC = () => {
                 }
             });
         }}
-        onManageAccounts={() => {
-             // Placeholder for account management
-        }}
+        onManageAccounts={() => {}}
       />
       
       <ConfirmationModal 

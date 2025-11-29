@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
+import InstallPWAButton from './InstallPWAButton';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
@@ -363,6 +364,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       <div className="absolute bottom-16 text-center text-[8px] font-mono text-nexa-cyan/30 tracking-widest animate-fade-in z-50">
         © 2025 CHANDAN LOHAVE. ALL RIGHTS RESERVED.
       </div>
+
+      {/* --- INSTALL PWA BUTTON --- */}
+      <InstallPWAButton />
 
       {/* Styles for clip-path support */}
       <style>{`
