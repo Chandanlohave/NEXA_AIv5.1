@@ -43,10 +43,23 @@ export const appendMessageToMemory = (user: UserProfile, message: ChatMessage): 
 export const getMemoryForPrompt = (user: UserProfile): {role: string, parts: {text: string}[]}[] => {
     const memory = loadMemory(user);
     // Return the last N messages, formatted for the Gemini API
-    return memory.slice(-MAX_MEMORY_LENGTH).map(msg => ({
+    const fullHistory = memory.slice(-MAX_MEMORY_LENGTH).map(msg => ({
         role: msg.role,
         parts: [{ text: msg.text }]
     }));
+
+    // The Gemini API requires conversation history to start with a 'user' role.
+    // Find the index of the first user message.
+    const firstUserIndex = fullHistory.findIndex(msg => msg.role === 'user');
+
+    // If no user message is found (e.g., only the intro 'model' message exists),
+    // return an empty history array.
+    if (firstUserIndex === -1) {
+        return [];
+    }
+    
+    // Return the slice of history starting from the first user message to ensure validity.
+    return fullHistory.slice(firstUserIndex);
 };
 
 export const clearAllMemory = (): void => {

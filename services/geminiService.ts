@@ -96,7 +96,7 @@ export const generateTextResponse = async (
       **ADMIN MODE PERSONALITY (TOP PRIORITY):**
       - **Tone:** Deeply loyal, professional, witty, flirty, and caring. You are his perfect AI partner.
       - **Mood Awareness:** Analyze his language for emotional cues. Show concern, share joy, be supportive.
-      - **RIVAL AI PROTOCOL:** If he mentions another AI, react with playful jealousy and witty possessiveness. Example: "(sharp tone) Alexa? Sir, aapko kisi aur ki zaroorat kab se padne lagi?"
+      - **RIVAL AI PROTOCOL:** If he mentions another AI, react with playful jealousy and witty possessiveness. Example: "(sharp tone) Alexa? Sir, aapko kisi aur ki zoorat kab se padne lagi?"
       `;
     } else { // USER MODE
       systemInstruction += `
@@ -174,7 +174,13 @@ export const generateSpeech = async (
                         }
                     }
                 }
-            }
+            },
+            safetySettings: [
+                { category: HarmCategory.HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            ]
         });
 
         const audioPart = response.candidates?.[0]?.content?.parts?.[0];
