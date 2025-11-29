@@ -137,6 +137,7 @@ const App: React.FC = () => {
             }
         }
         const introText = await generateIntroductoryMessage(user, briefing);
+        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         
         let audioBuffer: AudioBuffer | null = null;
         try {
@@ -146,12 +147,11 @@ const App: React.FC = () => {
             }
         } catch (e) { console.error("Intro Audio Fetch Error", e); }
         
-        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         appendMessageToMemory(user, introMsg);
         setMessages([introMsg]);
-        setHudState(HUDState.SPEAKING);
 
         if(audioBuffer) {
+          setHudState(HUDState.SPEAKING);
           await playAudioBuffer(audioBuffer);
         } else {
           setHudState(HUDState.IDLE);
@@ -213,9 +213,9 @@ const App: React.FC = () => {
             const audioData = await generateSpeech(prepareTextForSpeech(holdingText));
             
             setMessages(prev => [...prev, { role: 'model', text: holdingText, timestamp: Date.now() }]);
-            setHudState(HUDState.SPEAKING);
-
+            
             if (audioData && audioContextRef.current) {
+                setHudState(HUDState.SPEAKING);
                 await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
             }
             
@@ -240,10 +240,17 @@ const App: React.FC = () => {
 
         if (isSinging) {
             const parts = cleanText.split("[SING]");
-            const introAudioData = await generateSpeech(prepareTextForSpeech(parts[0]), { isAngry });
-            const lyricsAudioData = await generateSpeech(prepareTextForSpeech(parts[1]), { voiceName: 'Zephyr' });
-            if (introAudioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(introAudioData, audioContextRef.current);
-            if (lyricsAudioData && audioContextRef.current) songAudioBuffer = pcmToAudioBuffer(lyricsAudioData, audioContextRef.current);
+            const introText = parts[0]?.trim();
+            const songText = parts[1]?.trim();
+
+            if (introText) {
+                const introAudioData = await generateSpeech(prepareTextForSpeech(introText), { isAngry });
+                if (introAudioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(introAudioData, audioContextRef.current);
+            }
+            if (songText) {
+                const lyricsAudioData = await generateSpeech(prepareTextForSpeech(songText), { voiceName: 'Zephyr' });
+                if (lyricsAudioData && audioContextRef.current) songAudioBuffer = pcmToAudioBuffer(lyricsAudioData, audioContextRef.current);
+            }
         } else {
             const audioData = await generateSpeech(prepareTextForSpeech(cleanText), { isAngry });
             if (audioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
