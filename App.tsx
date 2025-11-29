@@ -3,6 +3,7 @@ import Auth from './components/Auth';
 import HUD from './components/HUD';
 import ChatPanel from './ChatPanel';
 import AdminPanel from './components/AdminPanel';
+import UserSettingsPanel from './components/UserSettingsPanel';
 import ConfigError from './components/ConfigError';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
 import { generateTextResponse, generateSpeech, generateIntroductoryMessage, generateAdminBriefing } from './services/geminiService';
@@ -24,20 +25,18 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
 
 const prepareTextForSpeech = (text: string): string => text.replace(/Nexa/gi, 'Neksa').replace(/Lohave/gi, 'लोहवे');
 
-const StatusBar = ({ userName, onLogout, onSettings, latency, role }: any) => (
+const StatusBar = ({ userName, onLogout, onSettings, latency }: any) => (
     <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-nexa-cyan/10 bg-black/80 backdrop-blur-md z-40 relative">
         <div className="flex items-center gap-4">
             <div className="flex flex-col items-start">
                 <div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">{userName}</div>
-                <div className="flex gap-1 mt-1">
-                    <div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div>
-                </div>
+                <div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div>
             </div>
             {latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-nexa-cyan/60 border-l border-nexa-cyan/20 pl-4">API LATENCY: <span className="text-white">{latency}ms</span></div>)}
         </div>
         <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div>
         <div className="flex items-center gap-4">
-            {role === UserRole.ADMIN && (<button onClick={onSettings} className="p-2 hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>)}
+            <button onClick={onSettings} className="p-2 hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>
             <button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button>
         </div>
     </div>
@@ -86,6 +85,7 @@ const App: React.FC = () => {
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
   const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1, micRotationSpeed: 1 });
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [latency, setLatency] = useState<number | null>(null);
   const [isKeyValid, setIsKeyValid] = useState<boolean | null>(null);
@@ -141,10 +141,10 @@ const App: React.FC = () => {
         appendMessageToMemory(user, introMsg);
         setMessages([introMsg]);
 
+        setHudState(HUDState.SPEAKING);
         try {
             const audioData = await generateSpeech(prepareTextForSpeech(introText));
             if (audioData && audioContextRef.current) {
-                setHudState(HUDState.SPEAKING);
                 await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
             }
         } catch (e) { console.error("Intro Audio Fetch Error", e); }
@@ -177,6 +177,14 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSettingsClick = () => {
+    if (user?.role === UserRole.ADMIN) {
+      setIsAdminPanelOpen(true);
+    } else {
+      setIsUserSettingsOpen(true);
+    }
+  };
+
   const processInput = async (text: string, isSecondPass: boolean = false) => {
     if (!user || isProcessingRef.current) return;
     isProcessingRef.current = true;
@@ -198,8 +206,8 @@ const App: React.FC = () => {
             setMessages(prev => [...prev, { role: 'model', text: holdingText, timestamp: Date.now() }]);
             const audioData = await generateSpeech(prepareTextForSpeech(holdingText));
             if (audioData && audioContextRef.current) await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
-            isProcessingRef.current = false; // Release lock before second pass
-            await processInput(text, true); // Re-call for the actual answer
+            isProcessingRef.current = false;
+            await processInput(text, true);
             return;
         }
 
@@ -264,13 +272,19 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full h-full bg-black flex flex-col overflow-hidden font-sans select-none">
       <div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div>
-      <StatusBar userName={user.name} role={user.role} onLogout={handleLogout} onSettings={() => setIsAdminPanelOpen(true)} latency={latency} />
+      <StatusBar userName={user.name} onLogout={handleLogout} onSettings={handleSettingsClick} latency={latency} />
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
         <div className="flex-[0.45] flex items-center justify-center min-h-[250px] relative"><HUD state={hudState} rotationSpeed={config.hudRotationSpeed} /></div>
         <div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div>
       </div>
       <ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.micRotationSpeed || 1} />
-      <AdminPanel isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} onManageAccounts={() => {}} />
+      
+      {user.role === UserRole.ADMIN ? (
+        <AdminPanel isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} onManageAccounts={() => {}} />
+      ) : (
+        <UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} />
+      )}
+
       <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({...confirmModal, isOpen: false}); }} onClose={() => setConfirmModal({...confirmModal, isOpen: false})} confirmationWord={confirmModal.confirmationWord} />
     </div>
   );
