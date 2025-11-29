@@ -295,10 +295,28 @@ const App: React.FC = () => {
       const init = async () => {
         setHudState(HUDState.THINKING);
         const introText = await generateIntroductoryMessage(user);
+        
+        // --- SYNC FIX: Pre-fetch audio BEFORE showing text/changing state ---
+        let audioBuffer: AudioBuffer | null = null;
+        try {
+            const phoneticText = prepareTextForSpeech(introText);
+            const audioData = await generateSpeech(phoneticText, user.role, false);
+            if (audioData && audioContextRef.current) {
+                audioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
+            }
+        } catch (e) {
+            console.error("Intro Audio Fetch Error", e);
+        }
+
+        // Now update UI and Play simultaneously
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         setMessages([introMsg]);
         setHudState(HUDState.SPEAKING); // Start speaking animation
-        await playResponseAudio(introText, user.role);
+        
+        if (audioBuffer) {
+             await playAudioBuffer(audioBuffer);
+        }
+        
         setHudState(HUDState.IDLE);
       };
       init();
@@ -360,18 +378,29 @@ const App: React.FC = () => {
       // 2. Check for Angry State
       const isAngry = responseText.includes("[[STATE:ANGRY]]") || responseText.includes("(sharp tone)") || responseText.includes("Hmph");
       const cleanText = responseText.replace("[[STATE:ANGRY]]", "").trim();
+      
+      // --- SYNC FIX: Generate Audio BEFORE showing text/changing state ---
+      let audioBuffer: AudioBuffer | null = null;
+      try {
+          const phoneticText = prepareTextForSpeech(cleanText);
+          const audioData = await generateSpeech(phoneticText, user.role, isAngry);
+          if (audioData && audioContextRef.current) {
+              audioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
+          }
+      } catch (e) {
+          console.error("Response Audio Fetch Error", e);
+      }
 
-      if (isAngry) setHudState(HUDState.ANGRY);
-
-      // 3. Add Model Message
+      // 3. Add Model Message (Now that audio is ready)
       const modelMsg: ChatMessage = { role: 'model', text: cleanText, timestamp: Date.now(), isAngry };
       setMessages(prev => [...prev, modelMsg]);
 
-      // 4. Generate & Play Audio
+      // 4. Play Audio
       setHudState(isAngry ? HUDState.ANGRY : HUDState.SPEAKING);
-      setIsAudioLoading(true);
-      await playResponseAudio(cleanText, user.role, isAngry);
-      setIsAudioLoading(false);
+      
+      if (audioBuffer) {
+           await playAudioBuffer(audioBuffer);
+      }
       
       // Reset State
       setHudState(HUDState.IDLE);
@@ -393,23 +422,18 @@ const App: React.FC = () => {
     }
   };
 
-  const playResponseAudio = async (text: string, role: UserRole, isAngry = false) => {
+  const playAudioBuffer = async (buffer: AudioBuffer) => {
+    if (!audioContextRef.current) return;
     try {
-        const phoneticText = prepareTextForSpeech(text);
-        const audioBufferData = await generateSpeech(phoneticText, role, isAngry);
-        if (audioBufferData && audioContextRef.current) {
-            const buffer = pcmToAudioBuffer(audioBufferData, audioContextRef.current);
-            const source = audioContextRef.current.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioContextRef.current.destination);
-            source.start(0);
-            
-            return new Promise<void>((resolve) => {
-                source.onended = () => resolve();
-            });
-        }
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContextRef.current.destination);
+        source.start(0);
+        return new Promise<void>((resolve) => {
+            source.onended = () => resolve();
+        });
     } catch (e) {
-        console.error("Audio Playback Error", e);
+        console.error("Buffer Playback Error", e);
     }
   };
 
