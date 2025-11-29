@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     // Define process.env to make environment variables available in the client-side code
     define: {
-      // Use VITE_API_KEY if available, otherwise fall back to API_KEY
-      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY),
+      // Enforce Vite's standard: only expose variables prefixed with VITE_
+      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY),
     },
     server: {
       host: true,

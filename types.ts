@@ -5,7 +5,7 @@ export enum UserRole {
 
 export interface UserProfile {
   name: string;
-  mobile: string;
+  mobile: string; // Now a mandatory unique identifier for users
   role: UserRole;
 }
 

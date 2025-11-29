@@ -3,6 +3,7 @@ import { ChatMessage, UserRole, HUDState } from './types';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
+  userName?: string;
   userRole?: UserRole;
   hudState?: HUDState;
   isAudioLoading?: boolean;
@@ -21,49 +22,31 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
 
   useEffect(() => {
     let index = 0;
-
     const type = () => {
       if (index < text.length) {
-        const currentText = text.substring(0, index + 1);
-        if (spanRef.current) {
-          spanRef.current.textContent = currentText;
-        }
+        if (spanRef.current) spanRef.current.textContent = text.substring(0, index + 1);
         index++;
-        onUpdate(); // For scrolling
-        const delay = 30 + (Math.random() * 25 - 10); // Human-like delay
-        timeoutRef.current = window.setTimeout(type, delay);
+        onUpdate();
+        timeoutRef.current = window.setTimeout(type, 30 + (Math.random() * 25 - 10));
       } else {
         onComplete();
       }
     };
-    
-    // Ensure previous text is cleared before starting
-    if (spanRef.current) {
-      spanRef.current.textContent = "";
-    }
-
+    if (spanRef.current) spanRef.current.textContent = "";
     type();
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [text, onComplete, onUpdate]);
   
   return <span ref={spanRef}></span>;
 };
 
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USER, hudState, isAudioLoading, onTypingComplete }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = UserRole.USER, hudState, isAudioLoading, onTypingComplete }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, []);
 
@@ -90,12 +73,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
 
           let label = 'NEXA';
           if (isUser) {
-            label = userRole === UserRole.ADMIN ? 'ADMIN' : 'USER';
+            label = userRole === UserRole.ADMIN ? 'ADMIN' : (userName || 'USER').toUpperCase();
           }
           
           const shouldAnimate = isLastMessage && !isUser && (hudState === HUDState.SPEAKING || hudState === HUDState.ANGRY);
-          const showAudioLoader = isLastMessage && !isUser && isAudioLoading;
-          
           const cleanTextForDisplay = msg.text.trim();
 
           return (
@@ -111,13 +92,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
                       ) : (
                         <span className="whitespace-pre-wrap">{cleanTextForDisplay}</span>
                       )}
-                      {showAudioLoader && (
-                        <div className="inline-flex items-center gap-1 ml-2">
-                            <span className="w-1 h-1 bg-nexa-cyan/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
-                            <span className="w-1 h-1 bg-nexa-cyan/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span>
-                            <span className="w-1 h-1 bg-nexa-cyan/70 rounded-full animate-pulse"></span>
-                        </div>
-                      )}
                     </>
                   )}
                 </div>
@@ -129,44 +103,31 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userRole = UserRole.USE
           );
         })}
         
-        {/* Listening Indicator */}
         {hudState === HUDState.LISTENING && (
           <div className="flex justify-end animate-fade-in">
             <div className="relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed text-right border-r border-nexa-red/30 bg-gradient-to-l from-nexa-red/5 to-transparent">
               <div className="text-nexa-red flex items-center justify-end gap-2">
-                <div className="inline-flex items-center gap-1">
-                  <span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
-                  <span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span>
-                  <span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse"></span>
-                </div>
+                <div className="inline-flex items-center gap-1"><span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span><span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span><span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse"></span></div>
                 <span>Listening</span>
               </div>
               <div className="text-[8px] uppercase tracking-widest mt-1 opacity-50 text-nexa-red">
-                 {userRole === UserRole.ADMIN ? 'ADMIN' : 'USER'} &middot; CAPTURING
+                 {(userRole === UserRole.ADMIN ? 'ADMIN' : (userName || 'USER')).toUpperCase()} &middot; CAPTURING
               </div>
             </div>
           </div>
         )}
 
-        {/* Thinking Indicator */}
         {hudState === HUDState.THINKING && lastMessage?.role === 'user' && (
           <div className="flex justify-start animate-slide-up">
             <div className="relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed text-left border-l border-nexa-yellow/30 bg-gradient-to-r from-nexa-yellow/5 to-transparent">
               <div className="text-nexa-yellow flex items-center gap-2">
                 <span>NEXA is processing</span>
-                <div className="inline-flex items-center gap-1">
-                  <span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
-                  <span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span>
-                  <span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse"></span>
-                </div>
+                <div className="inline-flex items-center gap-1"><span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span><span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span><span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse"></span></div>
               </div>
-              <div className="text-[8px] uppercase tracking-widest mt-1 opacity-50 text-nexa-yellow">
-                 SYSTEM &middot; THINKING
-              </div>
+              <div className="text-[8px] uppercase tracking-widest mt-1 opacity-50 text-nexa-yellow">SYSTEM &middot; THINKING</div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
