@@ -17,7 +17,7 @@ const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
     <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs><radialGradient id="coreGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" stopColor="#ffdd44" /><stop offset="100%" stopColor="#ffcc00" /></radialGradient></defs>
-      <g style={{ transformOrigin: 'center', animation: `spin ${rotationDuration} linear infinite` }}><circle cx="12" cy="12" r="10" stroke="#ffcc00" strokeWidth="4" strokeDasharray="5.85 2" transform="rotate(-11.25 12 12)" /></g>
+      <g style={{ transformOrigin: 'center', animation: `spin ${rotationDuration} linear infinite` }}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeDasharray="5.85 2" transform="rotate(-11.25 12 12)" /></g>
       <circle cx="12" cy="12" r="8" stroke="rgba(0,0,0,0.7)" strokeWidth="0.5" />
       <circle cx="12" cy="12" r="7.75" fill="url(#coreGradient)" />
     </svg>
@@ -137,18 +137,25 @@ const App: React.FC = () => {
             }
         }
         const introText = await generateIntroductoryMessage(user, briefing);
-        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
-        appendMessageToMemory(user, introMsg);
-        setMessages([introMsg]);
-
-        setHudState(HUDState.SPEAKING);
+        
+        let audioBuffer: AudioBuffer | null = null;
         try {
             const audioData = await generateSpeech(prepareTextForSpeech(introText));
             if (audioData && audioContextRef.current) {
-                await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
+                audioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
             }
         } catch (e) { console.error("Intro Audio Fetch Error", e); }
-        setHudState(HUDState.IDLE);
+        
+        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
+        appendMessageToMemory(user, introMsg);
+        setMessages([introMsg]);
+        setHudState(HUDState.SPEAKING);
+
+        if(audioBuffer) {
+          await playAudioBuffer(audioBuffer);
+        } else {
+          setHudState(HUDState.IDLE);
+        }
       };
       init();
     }
@@ -157,7 +164,7 @@ const App: React.FC = () => {
   const handleLogin = (profile: UserProfile) => {
     setUser(profile);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
-    setMessages([]); // Clear session messages on new login
+    setMessages([]);
   };
 
   const handleLogout = () => {
@@ -203,9 +210,15 @@ const App: React.FC = () => {
 
         if (responseText.includes("[THINKING]")) {
             const holdingText = responseText.split("[THINKING]")[0].trim();
-            setMessages(prev => [...prev, { role: 'model', text: holdingText, timestamp: Date.now() }]);
             const audioData = await generateSpeech(prepareTextForSpeech(holdingText));
-            if (audioData && audioContextRef.current) await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
+            
+            setMessages(prev => [...prev, { role: 'model', text: holdingText, timestamp: Date.now() }]);
+            setHudState(HUDState.SPEAKING);
+
+            if (audioData && audioContextRef.current) {
+                await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
+            }
+            
             isProcessingRef.current = false;
             await processInput(text, true);
             return;
@@ -221,23 +234,28 @@ const App: React.FC = () => {
         const isAngry = responseText.includes("[[STATE:ANGRY]]");
         const isSinging = responseText.includes("[SING]");
         const cleanText = responseText.replace(/\[\[STATE:ANGRY\]\]|\[LOG_INCIDENT:.*?\]/g, "").trim();
-      
-        const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace("[SING]", "\n\n"), timestamp: Date.now(), isAngry };
-        appendMessageToMemory(user, modelMsg);
-        setMessages(prev => [...prev, modelMsg]);
+        
+        let mainAudioBuffer: AudioBuffer | null = null;
+        let songAudioBuffer: AudioBuffer | null = null;
 
-        setHudState(isAngry ? HUDState.ANGRY : HUDState.SPEAKING);
-      
         if (isSinging) {
             const parts = cleanText.split("[SING]");
             const introAudioData = await generateSpeech(prepareTextForSpeech(parts[0]), { isAngry });
             const lyricsAudioData = await generateSpeech(prepareTextForSpeech(parts[1]), { voiceName: 'Zephyr' });
-            if (introAudioData && audioContextRef.current) await playAudioBuffer(pcmToAudioBuffer(introAudioData, audioContextRef.current));
-            if (lyricsAudioData && audioContextRef.current) await playAudioBuffer(pcmToAudioBuffer(lyricsAudioData, audioContextRef.current));
+            if (introAudioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(introAudioData, audioContextRef.current);
+            if (lyricsAudioData && audioContextRef.current) songAudioBuffer = pcmToAudioBuffer(lyricsAudioData, audioContextRef.current);
         } else {
             const audioData = await generateSpeech(prepareTextForSpeech(cleanText), { isAngry });
-            if (audioData && audioContextRef.current) await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
+            if (audioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
         }
+
+        const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace("[SING]", "\n\n"), timestamp: Date.now(), isAngry };
+        appendMessageToMemory(user, modelMsg);
+        setMessages(prev => [...prev, modelMsg]);
+        setHudState(isAngry ? HUDState.ANGRY : HUDState.SPEAKING);
+      
+        if (mainAudioBuffer) await playAudioBuffer(mainAudioBuffer);
+        if (songAudioBuffer) await playAudioBuffer(songAudioBuffer);
       
         if (activeAudioSourcesRef.current.size === 0) setHudState(HUDState.IDLE);
     } catch (error: any) {
@@ -274,10 +292,10 @@ const App: React.FC = () => {
       <div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div>
       <StatusBar userName={user.name} onLogout={handleLogout} onSettings={handleSettingsClick} latency={latency} />
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
-        <div className="flex-[0.45] flex items-center justify-center min-h-[250px] relative"><HUD state={hudState} rotationSpeed={config.hudRotationSpeed} /></div>
+        <div className="flex-[0.45] flex items-center justify-center min-h-[250px] relative"><HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} /></div>
         <div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div>
       </div>
-      <ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.micRotationSpeed || 1} />
+      <ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.animationsEnabled ? (config.micRotationSpeed || 1) : 0} />
       
       {user.role === UserRole.ADMIN ? (
         <AdminPanel isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} onManageAccounts={() => {}} />
