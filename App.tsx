@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
-import ChatPanel from './ChatPanel';
+import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
 import ConfigError from './components/ConfigError';

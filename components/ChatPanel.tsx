@@ -76,7 +76,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
             label = userRole === UserRole.ADMIN ? 'ADMIN' : (userName || 'USER').toUpperCase();
           }
           
-          const shouldAnimate = isLastMessage && !isUser && (hudState === HUDState.SPEAKING || hudState === HUDState.WARNING); // Changed HUDState.ANGRY to HUDState.WARNING
+          const shouldAnimate = isLastMessage && !isUser && (hudState === HUDState.SPEAKING || hudState === HUDState.WARNING);
           const cleanTextForDisplay = msg.text.trim();
 
           return (
