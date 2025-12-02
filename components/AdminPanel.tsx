@@ -7,8 +7,8 @@ interface AdminPanelProps {
   config: AppConfig;
   onConfigChange: (newConfig: AppConfig) => void;
   onClearMemory: () => void;
-  onManageAccounts: () => void; // New prop for Manage Accounts
-  onViewStudyHub: () => void; // New prop for Study Hub
+  onManageAccounts: () => void;
+  onViewStudyHub: () => void;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConfigChange, onClearMemory, onManageAccounts, onViewStudyHub }) => {
@@ -59,7 +59,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
           </div>
         </div>
 
-        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+        <div>
           <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">HUD Rotation Speed</label>
           <input 
             type="range" 

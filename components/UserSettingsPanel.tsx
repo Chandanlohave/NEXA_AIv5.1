@@ -39,8 +39,8 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
             <ThemeButton label="System" value="system" />
           </div>
         </div>
-
-        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+        
+        <div>
           <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">HUD Animation Speed</label>
           <input 
             type="range" 

@@ -1,16 +1,18 @@
+import { GoogleGenAI } from "@google/genai";
 import { UserProfile, UserRole, StudyHubSubject } from "../types";
 import { getMemoryForPrompt } from "./memoryService";
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama3-8b-8192";
+const GEMINI_MODEL = "gemini-3-pro-preview";
 
+// FIX: Updated API key handling to exclusively use environment variables as per guidelines.
 const checkApiKey = () => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey || !apiKey.startsWith('gsk_')) {
-    throw new Error("GROQ_API_KEY_MISSING");
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY_MISSING");
   }
   return apiKey;
 };
+
 
 export const getStudyHubSchedule = (): StudyHubSubject[] => {
   return [
@@ -67,6 +69,8 @@ export const generateTextResponse = async (
   
   try {
     const apiKey = checkApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
     const now = new Date();
     const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
     const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -164,37 +168,31 @@ export const generateTextResponse = async (
         systemInstruction = systemInstruction.replace(/SELF-THINKING PROTOCOL[\s\S]*?USER & CONTEXT:/, 'USER & CONTEXT:');
     }
 
-    const payload = {
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        ...history,
-        { role: 'user', content: input }
-      ],
-      temperature: 0.75,
-      top_p: 0.95,
-      max_tokens: 4096
-    };
+    // FIX: The role from history is 'assistant', which needs to be mapped to 'model' for the Gemini API. This resolves the TypeScript error.
+    const contents = history.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+    contents.push({ role: 'user', parts: [{ text: input }] });
 
-    const response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.75,
+        topP: 0.95,
+        maxOutputTokens: 4096,
+      }
     });
-
-    if (!response.ok) {
-        const errorBody = await response.text();
-        console.error("Groq API Error:", response.status, errorBody);
-        throw new Error(`Groq API request failed with status ${response.status}`);
+    
+    return response.text || "I'm sorry, I couldn't process that. Please try again.";
+  } catch (error: any) {
+    console.error("Gemini Text Gen Error:", error);
+    // FIX: Removed session storage logic as per guidelines.
+    if (error.message?.includes('API key not valid')) {
+      throw new Error("API_KEY_INVALID");
     }
-
-    const data = await response.json();
-    return data.choices[0]?.message?.content || "I'm sorry, I couldn't process that. Please try again.";
-  } catch (error) {
-    console.error("Groq Text Gen Error:", error);
     throw error;
   }
 };
@@ -204,26 +202,18 @@ export const generateAdminBriefing = async (notifications: string[]): Promise<st
         return "";
     }
     const apiKey = checkApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
     const prompt = `You are NEXA. The admin, Chandan, has just logged in. There are new notifications about user activity. Summarize these notifications for him in your witty, flirty, and caring admin-mode personality. Be concise but informative. Start with a confident greeting. Here are the raw logs: ${JSON.stringify(notifications)}`;
 
-    const payload = {
-      model: GROQ_MODEL,
-      messages: [{ role: 'user', content: prompt }]
-    };
-
-    const response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      return "Welcome back, sir. I was unable to retrieve the latest briefing.";
+    try {
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt
+      });
+      return response.text || "Welcome back, sir. Briefing retrieval failed.";
+    } catch (error) {
+      console.error("Gemini Briefing Gen Error:", error);
+      return "Welcome back, sir. I was unable to retrieve the latest briefing due to a system error.";
     }
-
-    const data = await response.json();
-    return data.choices[0]?.message?.content || "Welcome back, sir. Briefing retrieval failed.";
 };

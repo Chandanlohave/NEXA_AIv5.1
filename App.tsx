@@ -11,6 +11,7 @@ import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types
 import { generateTextResponse, generateIntroductoryMessage, generateAdminBriefing } from './services/geminiService';
 import { playMicOnSound, playMicOffSound, playErrorSound } from './services/audioService';
 import { appendMessageToMemory, clearAllMemory, getAdminNotifications, clearAdminNotifications } from './services/memoryService';
+import { speak as speakTextTTS, stop as stopTextTTS } from './services/ttsService';
 
 // --- ICONS ---
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
@@ -24,20 +25,6 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
       <circle cx="12" cy="12" r="7.75" fill="url(#coreGradient)" />
     </svg>
 );
-
-type Language = 'ENGLISH_HINGLISH' | 'HINDI_MARATHI';
-const detectLanguage = (text: string): Language => {
-    const devanagariRegex = /[\u0900-\u097F]/;
-    return devanagariRegex.test(text) ? 'HINDI_MARATHI' : 'ENGLISH_HINGLISH';
-};
-
-const prepareTextForSpeech = (text: string, language: Language): string => {
-    let processedText = text.replace(/Nexa/gi, 'Neksa');
-    if (language === 'HINDI_MARATHI') {
-        processedText = processedText.replace(/Lohave/gi, 'लोहवे');
-    }
-    return processedText;
-};
 
 const StatusBar = ({ userName, onLogout, onSettings, latency }: any) => (
     <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
@@ -113,19 +100,25 @@ const App: React.FC = () => {
 
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [latency, setLatency] = useState<number | null>(null);
-  const [isKeyValid, setIsKeyValid] = useState<boolean | null>(null);
+  const [isKeyValid, setIsKeyValid] = useState<boolean>(() => !!process.env.API_KEY);
 
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
-  const synthRef = useRef(window.speechSynthesis);
-
+  
   useEffect(() => {
-    setIsKeyValid(!!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.length > 10));
     const savedUser = localStorage.getItem('nexa_user');
     if (savedUser) setUser(JSON.parse(savedUser));
     const savedConfig = localStorage.getItem('nexa_config');
-    if (savedConfig) setConfig(prev => ({ ...prev, ...JSON.parse(savedConfig) }));
+    if (savedConfig) {
+      const parsedConfig = JSON.parse(savedConfig);
+      setConfig(prev => ({ ...prev, ...parsedConfig }));
+    }
   }, []);
+
+  const handleConfigChange = (newConfig: AppConfig) => {
+    setConfig(newConfig);
+    localStorage.setItem('nexa_config', JSON.stringify(newConfig));
+  };
 
   useEffect(() => {
     const applyTheme = (theme: AppConfig['theme']) => {
@@ -186,35 +179,22 @@ const App: React.FC = () => {
   }, [user]);
 
   const speakText = useCallback((text: string) => {
-    if (!text || !synthRef.current) {
+    if (!text) {
         setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
         return;
     }
 
-    synthRef.current.cancel(); // Cancel any ongoing speech
-
-    const lang = detectLanguage(text);
-    const preparedText = prepareTextForSpeech(text, lang);
-    const utterance = new SpeechSynthesisUtterance(preparedText);
-    
-    utterance.onstart = () => {
-        setHudState(HUDState.SPEAKING);
-    };
-
-    utterance.onend = () => {
-        if (!isProcessingRef.current) {
-            setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+    speakTextTTS(
+        text,
+        () => {
+            setHudState(HUDState.SPEAKING);
+        },
+        () => {
+            if (!isProcessingRef.current) {
+                setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+            }
         }
-    };
-    
-    utterance.onerror = (e) => {
-        console.error("Speech Synthesis Error", e);
-        if (!isProcessingRef.current) {
-            setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
-        }
-    };
-    
-    synthRef.current.speak(utterance);
+    );
   }, [isStudyHubOpen]);
 
   useEffect(() => {
@@ -261,7 +241,7 @@ const App: React.FC = () => {
     if (hudState === HUDState.LISTENING) {
       recognitionRef.current?.stop();
     } else if (hudState === HUDState.IDLE || hudState === HUDState.SPEAKING || hudState === HUDState.STUDY_HUB) {
-      synthRef.current.cancel();
+      stopTextTTS();
       try { recognitionRef.current?.start(); } catch (e) { console.error("Mic Start Error", e); setHudState(HUDState.IDLE); }
     }
   };
@@ -337,14 +317,17 @@ const App: React.FC = () => {
         console.error("Processing Error", error);
         setHudState(HUDState.IDLE); 
         playErrorSound();
-        const errorText = (error.message?.includes('API_KEY')) ? "SYSTEM ALERT: API Access Key invalid or missing." : "I encountered an internal error.";
+        let errorText = "I encountered an internal error. Please try again.";
+        if (error.message?.includes('API_KEY_MISSING') || error.message?.includes('API_KEY_INVALID')) {
+            errorText = "SYSTEM ALERT: Gemini API Access Key is missing or invalid.";
+            setIsKeyValid(false);
+        }
         setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
     } finally {
         isProcessingRef.current = false;
     }
   };
   
-  if (isKeyValid === null) return <div className="w-full h-full bg-black"></div>;
   if (!isKeyValid) return <ConfigError />;
   if (!user) return <Auth onLogin={handleLogin} />;
 
@@ -363,13 +346,18 @@ const App: React.FC = () => {
           isOpen={isAdminPanelOpen} 
           onClose={() => setIsAdminPanelOpen(false)} 
           config={config} 
-          onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} 
+          onConfigChange={handleConfigChange} 
           onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} 
           onManageAccounts={handleManageAccounts} 
           onViewStudyHub={handleViewStudyHub}
         />
       ) : (
-        <UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} />
+        <UserSettingsPanel 
+          isOpen={isUserSettingsOpen} 
+          onClose={() => setIsUserSettingsOpen(false)} 
+          config={config} 
+          onConfigChange={handleConfigChange} 
+        />
       )}
 
       <StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(HUDState.IDLE); }} />
