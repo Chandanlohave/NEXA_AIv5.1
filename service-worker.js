@@ -63,7 +63,7 @@ self.addEventListener('fetch', event => {
   }
 
   // API requests -> Network only, never cache.
-  if (url.hostname === 'api.groq.com') {
+  if (url.hostname === 'generativelanguage.googleapis.com') {
     event.respondWith(fetch(request));
     return;
   }
