@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     // Define process.env to make environment variables available in the client-side code
     define: {
       // Enforce Vite's standard: only expose variables prefixed with VITE_
-      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY),
+      'process.env.GROQ_API_KEY': JSON.stringify(env.VITE_GROQ_API_KEY),
     },
     server: {
       host: true,

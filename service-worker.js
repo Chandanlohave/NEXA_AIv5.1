@@ -1,81 +1,73 @@
-const CACHE_NAME = 'nexa-cache-v7'; // Important: New version name
-const urlsToCache = [
+const CACHE_NAME = 'nexa-cache-v9'; // Incremented version
+const APP_SHELL_URLS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
 ];
 
-// Install: Open cache and add core files (the "app shell")
+// Stale-while-revalidate strategy function
+const staleWhileRevalidate = async (request) => {
+  const cache = await caches.open(CACHE_NAME);
+  const cachedResponsePromise = await cache.match(request);
+
+  const networkResponsePromise = fetch(request).then(response => {
+    // If the fetch is successful and it's a valid response, update the cache
+    if (response && response.status === 200) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  }).catch(err => {
+    console.warn(`[SW] Network request for ${request.url} failed:`, err);
+    // If network fails, we rely on the cached response.
+  });
+
+  // Return cached response immediately if available, otherwise wait for the network.
+  // If both fail, the request will fail, which is the expected behavior.
+  return cachedResponsePromise || networkResponsePromise;
+};
+
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('SW Opened cache. Caching app shell...');
-        return cache.addAll(urlsToCache);
+        console.log('[SW] Caching app shell');
+        return cache.addAll(APP_SHELL_URLS);
       })
+      .then(() => self.skipWaiting()) // Activate new SW immediately
   );
-  self.skipWaiting(); // Force the new service worker to become active
 });
 
-// Activate: Clean up old caches
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log('SW Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
+        cacheNames
+          .filter(name => name !== CACHE_NAME) // Filter out the current cache
+          .map(name => {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
+          })
       );
-    })
+    }).then(() => self.clients.claim()) // Take control of all open pages
   );
-  return self.clients.claim(); // Take control of all open clients
 });
 
-// Fetch: Serve from cache first, then network. Cache new requests dynamically.
 self.addEventListener('fetch', event => {
-  // We only want to cache GET requests.
-  if (event.request.method !== 'GET') {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Ignore non-GET requests
+  if (request.method !== 'GET') {
+    return;
+  }
+
+  // API requests -> Network only, never cache.
+  if (url.hostname === 'api.groq.com') {
+    event.respondWith(fetch(request));
     return;
   }
   
-  // Strategy: Cache first, then fall back to network.
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-
-        // Not in cache - fetch from network
-        return fetch(event.request).then(
-          networkResponse => {
-            // Check if we received a valid response and it's not an API call
-            if (!networkResponse || networkResponse.status !== 200 || event.request.url.includes('generativelanguage')) {
-              return networkResponse;
-            }
-
-            // IMPORTANT: Clone the response. A response is a stream
-            // and because we want the browser to consume the response
-            // as well as the cache consuming the response, we need
-            // to clone it so we have two streams.
-            const responseToCache = networkResponse.clone();
-
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return networkResponse;
-          }
-        ).catch(error => {
-          // Optional: You can return a custom offline page here if available.
-          console.log('Fetch failed; returning offline page if available.');
-        });
-      })
-  );
+  // For all other GET requests (app shell, JS, CSS, fonts), use stale-while-revalidate
+  event.respondWith(staleWhileRevalidate(request));
 });

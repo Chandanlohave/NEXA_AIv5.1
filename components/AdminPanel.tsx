@@ -7,10 +7,11 @@ interface AdminPanelProps {
   config: AppConfig;
   onConfigChange: (newConfig: AppConfig) => void;
   onClearMemory: () => void;
-  onManageAccounts: () => void;
+  onManageAccounts: () => void; // New prop for Manage Accounts
+  onViewStudyHub: () => void; // New prop for Study Hub
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConfigChange, onClearMemory, onManageAccounts }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConfigChange, onClearMemory, onManageAccounts, onViewStudyHub }) => {
   if (!isOpen) return null;
 
   const handleExportLogs = () => {
@@ -29,16 +30,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
     URL.revokeObjectURL(url);
   };
 
+  const ThemeButton: React.FC<{label: string, value: AppConfig['theme']}> = ({ label, value }) => {
+    const isActive = config.theme === value;
+    return (
+      <button 
+        onClick={() => onConfigChange({...config, theme: value})}
+        className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${isActive ? 'bg-nexa-cyan text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-cyan/50'}`}
+      >
+        {label}
+      </button>
+    )
+  };
+
   return (
-    <div className="absolute top-16 right-4 w-72 bg-black/90 border border-nexa-cyan rounded-lg backdrop-blur-md p-4 z-50 shadow-[0_0_20px_rgba(41,223,255,0.3)] animate-fade-in">
-      <div className="flex justify-between items-center mb-4 border-b border-zinc-800 pb-2">
+    <div className="absolute top-16 right-4 w-72 bg-white/80 dark:bg-black/90 border border-zinc-300 dark:border-nexa-cyan rounded-lg backdrop-blur-md p-4 z-50 shadow-[0_0_20px_rgba(41,223,255,0.3)] animate-fade-in">
+      <div className="flex justify-between items-center mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-2">
         <h2 className="text-nexa-cyan font-mono text-sm tracking-wider">ADMIN CONTROL</h2>
-        <button onClick={onClose} className="text-zinc-500 hover:text-white text-2xl leading-none">&times;</button>
+        <button onClick={onClose} className="text-zinc-500 hover:text-black dark:hover:text-white text-2xl leading-none">&times;</button>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-zinc-400 text-xs font-mono mb-1">HUD Rotation Speed</label>
+          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Appearance</label>
+          <div className="flex gap-1">
+            <ThemeButton label="Light" value="light" />
+            <ThemeButton label="Dark" value="dark" />
+            <ThemeButton label="System" value="system" />
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">HUD Rotation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -51,7 +73,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
         </div>
 
         <div>
-          <label className="block text-zinc-400 text-xs font-mono mb-1">Mic Rotation Speed</label>
+          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Mic Rotation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -64,29 +86,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
         </div>
 
         <div>
-          <label className="block text-zinc-400 text-xs font-mono mb-1">Animations</label>
+          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Animations</label>
           <button 
             onClick={() => onConfigChange({...config, animationsEnabled: !config.animationsEnabled})}
-            className={`w-full py-2 text-xs font-mono border ${config.animationsEnabled ? 'border-nexa-cyan text-nexa-cyan' : 'border-zinc-700 text-zinc-500'}`}
+            className={`w-full py-2 text-xs font-mono border ${config.animationsEnabled ? 'border-nexa-cyan text-nexa-cyan' : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-500'}`}
           >
             {config.animationsEnabled ? 'ENABLED' : 'DISABLED'}
           </button>
           <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Toggles HUD rotation &amp; effects.</p>
         </div>
 
-        <div className="pt-2 border-t border-zinc-800 space-y-2">
+        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
            <button 
              onClick={handleExportLogs}
-             className="w-full py-2 border border-zinc-700 text-zinc-400 hover:text-white hover:border-white text-xs font-mono transition-colors"
+             className="w-full py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:border-black dark:hover:border-white text-xs font-mono transition-colors"
            >
              EXPORT SYSTEM LOGS
            </button>
            
            <button 
              onClick={onManageAccounts}
-             className="w-full py-2 border border-zinc-700 text-zinc-400 hover:text-white hover:border-white text-xs font-mono transition-colors"
+             className="w-full py-2 border border-nexa-cyan/30 text-nexa-cyan hover:text-white hover:border-nexa-cyan text-xs font-mono transition-colors"
            >
              MANAGE USER DATA
+           </button>
+
+           <button 
+             onClick={onViewStudyHub}
+             className="w-full py-2 border border-nexa-blue/30 text-nexa-blue hover:text-white hover:border-nexa-blue text-xs font-mono transition-colors"
+           >
+             VIEW EXAM SCHEDULE & STUDY HUB
            </button>
 
            <button 

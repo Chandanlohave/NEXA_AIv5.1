@@ -22,11 +22,20 @@ export enum HUDState {
   LISTENING = 'LISTENING',
   THINKING = 'THINKING',
   SPEAKING = 'SPEAKING',
-  ANGRY = 'WARNING'
+  WARNING = 'WARNING', // Changed from ANGRY to WARNING
+  STUDY_HUB = 'STUDY HUB' // New state for Study Hub
 }
 
 export interface AppConfig {
   animationsEnabled: boolean;
   hudRotationSpeed: number;
   micRotationSpeed: number;
+  theme: 'light' | 'dark' | 'system';
+}
+
+export interface StudyHubSubject {
+  courseCode: string;
+  courseName: string;
+  date: string; // YYYY-MM-DD
+  time: string; // e.g., "2-5 PM", "10 AM - 1 PM"
 }

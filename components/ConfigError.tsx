@@ -14,10 +14,10 @@ const ConfigError: React.FC = () => {
         </p>
         <div className="my-6 h-[1px] bg-red-500/30 w-1/2 mx-auto"></div>
         <p className="text-zinc-400 text-sm leading-loose">
-          The environment variable for the API key is missing or invalid.
+          The environment variable for the Groq API key is missing or invalid.
         </p>
         <p className="text-zinc-500 text-xs mt-4 leading-normal">
-          To resolve this, the administrator (Chandan) must set the <code className="bg-zinc-700 text-white px-1">VITE_API_KEY</code> in the deployment environment settings (e.g., Vercel, Netlify). The variable must start with 'VITE_'.
+          To resolve this, the administrator (Chandan) must set the <code className="bg-zinc-700 text-white px-1">VITE_GROQ_API_KEY</code> in the deployment environment settings (e.g., Vercel, Netlify). The variable must start with 'VITE_'.
         </p>
         <p className="mt-8 text-xs text-red-500/50">SYSTEM OFFLINE</p>
       </div>

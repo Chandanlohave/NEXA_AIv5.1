@@ -5,13 +5,15 @@ import ChatPanel from './ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
 import ConfigError from './components/ConfigError';
+import StudyHubPanel from './components/StudyHubPanel';
+import ManageAccountsModal from './components/ManageAccountsModal';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
-import { generateTextResponse, generateSpeech, generateIntroductoryMessage, generateAdminBriefing } from './services/geminiService';
+import { generateTextResponse, generateIntroductoryMessage, generateAdminBriefing } from './services/geminiService';
 import { playMicOnSound, playMicOffSound, playErrorSound } from './services/audioService';
 import { appendMessageToMemory, clearAllMemory, getAdminNotifications, clearAdminNotifications } from './services/memoryService';
 
 // --- ICONS ---
-const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
+const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
@@ -23,57 +25,77 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const prepareTextForSpeech = (text: string): string => text.replace(/Nexa/gi, 'Neksa').replace(/Lohave/gi, 'लोहवे');
+type Language = 'ENGLISH_HINGLISH' | 'HINDI_MARATHI';
+const detectLanguage = (text: string): Language => {
+    const devanagariRegex = /[\u0900-\u097F]/;
+    return devanagariRegex.test(text) ? 'HINDI_MARATHI' : 'ENGLISH_HINGLISH';
+};
+
+const prepareTextForSpeech = (text: string, language: Language): string => {
+    let processedText = text.replace(/Nexa/gi, 'Neksa');
+    if (language === 'HINDI_MARATHI') {
+        processedText = processedText.replace(/Lohave/gi, 'लोहवे');
+    }
+    return processedText;
+};
 
 const StatusBar = ({ userName, onLogout, onSettings, latency }: any) => (
-    <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-nexa-cyan/10 bg-black/80 backdrop-blur-md z-40 relative">
+    <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
         <div className="flex items-center gap-4">
             <div className="flex flex-col items-start">
                 <div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">{userName}</div>
                 <div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div>
             </div>
-            {latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-nexa-cyan/60 border-l border-nexa-cyan/20 pl-4">API LATENCY: <span className="text-white">{latency}ms</span></div>)}
+            {latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-4">API LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)}
         </div>
-        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div>
+        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-zinc-900 dark:text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div>
         <div className="flex items-center gap-4">
-            <button onClick={onSettings} className="p-2 hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>
+            <button onClick={onSettings} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>
             <button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button>
         </div>
     </div>
 );
 
 const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1 }: any) => {
-    const isListening = hudState === HUDState.LISTENING, isAngry = hudState === HUDState.ANGRY, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING;
-    let baseDuration = isThinking ? 2 : (isSpeaking || isListening) ? 4 : isAngry ? 1 : 8;
+    const isListening = hudState === HUDState.LISTENING, isWarning = hudState === HUDState.WARNING, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING, isStudyHub = hudState === HUDState.STUDY_HUB;
+    let baseDuration = isThinking ? 2 : (isSpeaking || isListening) ? 4 : isWarning ? 1 : isStudyHub ? 6 : 8;
     const finalDuration = `${baseDuration / rotationSpeedMultiplier}s`;
-    const buttonScale = isListening || isAngry || isThinking ? 'scale-110' : 'hover:scale-105 active:scale-95';
-    let iconColorClass = (isListening || isAngry) ? 'text-nexa-red' : isThinking ? 'text-nexa-yellow' : 'text-nexa-cyan';
-    let pulseClass = (isListening || isAngry || isThinking) ? 'animate-pulse' : '';
+    const buttonScale = isListening || isWarning || isThinking ? 'scale-110' : 'hover:scale-105 active:scale-95';
+    let iconColorClass = (isListening || isWarning) ? 'text-nexa-red' : isThinking ? 'text-nexa-yellow' : isStudyHub ? 'text-nexa-blue' : 'text-nexa-cyan';
+    let pulseClass = (isListening || isWarning || isThinking || isStudyHub) ? 'animate-pulse' : '';
     return (
-        <div className="w-full h-24 shrink-0 bg-gradient-to-t from-black via-black/80 to-transparent z-40 relative flex items-center justify-center">
-            <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4"><div className="w-full h-full flex justify-between items-center"><div className="flex-1 h-full bg-gradient-to-r from-transparent via-nexa-cyan/20 to-nexa-cyan/40"></div><div className="w-24 flex-shrink-0"></div><div className="flex-1 h-full bg-gradient-to-l from-transparent via-nexa-cyan/20 to-nexa-cyan/40"></div></div></div>
+        <div className="w-full h-24 shrink-0 bg-gradient-to-t from-zinc-100 via-zinc-100/80 to-transparent dark:from-black dark:via-black/80 dark:to-transparent z-40 relative flex items-center justify-center">
+            <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4"><div className="w-full h-full flex justify-between items-center"><div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div><div className="w-24 flex-shrink-0"></div><div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div></div></div>
             <button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''}`}>
-                <div className="absolute inset-0 rounded-full bg-black"></div>
+                <div className="absolute inset-0 rounded-full bg-white dark:bg-black shadow-inner"></div>
                 <div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}><div className="scale-[1.4]"><MicIcon rotationDuration={finalDuration} /></div></div>
             </button>
         </div>
     );
 };
 
-const pcmToAudioBuffer = (pcmData: ArrayBuffer, context: AudioContext): AudioBuffer => { const int16Array = new Int16Array(pcmData); const float32Array = new Float32Array(int16Array.length); for (let i = 0; i < int16Array.length; i++) { float32Array[i] = int16Array[i] / 32768; } const buffer = context.createBuffer(1, float32Array.length, 24000); buffer.getChannelData(0).set(float32Array); return buffer; };
-
-const ConfirmationModal: React.FC<{isOpen: boolean, title: string, message: string, onConfirm: () => void, onClose: () => void, confirmationWord?: string}> = ({ isOpen, title, message, onConfirm, onClose, confirmationWord }) => {
+const ConfirmationModal: React.FC<{isOpen: boolean, title: string, message: string, onConfirm: () => void, onClose: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}> = ({ isOpen, title, message, onConfirm, onClose, confirmationWord, confirmLabel = 'CONFIRM', cancelLabel = 'CANCEL', variant = 'red' }) => {
   const [inputValue, setInputValue] = useState('');
   useEffect(() => { if (isOpen) setInputValue(''); }, [isOpen]);
   if (!isOpen) return null;
   const isConfirmDisabled = confirmationWord ? inputValue.toUpperCase() !== confirmationWord.toUpperCase() : false;
+
+  const primaryColor = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan';
+  const borderColor = variant === 'red' ? 'border-red-500/50' : 'border-nexa-cyan/50';
+  const bgColor = variant === 'red' ? 'bg-red-900/20' : 'bg-nexa-cyan/10';
+  const shadowColor = variant === 'red' ? 'shadow-[0_0_30px_rgba(255,42,42,0.4)]' : 'shadow-[0_0_30px_rgba(41,223,255,0.4)]';
+  const confirmButtonBg = variant === 'red' ? 'bg-red-600 hover:bg-red-500' : 'bg-nexa-cyan hover:bg-nexa-cyan/80';
+  const confirmButtonText = variant === 'red' ? 'text-white' : 'text-black';
+  const confirmButtonShadow = variant === 'red' ? 'shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'shadow-[0_0_15px_rgba(41,223,255,0.5)]';
+
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-sm bg-black border-2 border-red-500/50 p-6 shadow-[0_0_30px_rgba(255,42,42,0.4)]">
-        <h2 className="text-red-500 text-lg font-bold tracking-widest font-mono">{title}</h2>
+      <div className={`w-full max-w-sm bg-black border-2 ${borderColor} p-6 ${shadowColor}`}>
+        <h2 className={`${primaryColor} text-lg font-bold tracking-widest font-mono`}>{title}</h2>
         <p className="text-zinc-300 mt-4 font-sans leading-relaxed">{message}</p>
-        {confirmationWord && (<div className="mt-6"><p className="text-xs text-center text-zinc-400 font-mono mb-2">To confirm, type "{confirmationWord}" below.</p><input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full bg-red-900/20 border border-red-500/50 text-white text-center font-mono tracking-[0.3em] py-2 focus:outline-none focus:border-red-500 transition-colors uppercase" placeholder={confirmationWord} /></div>)}
-        <div className="flex gap-4 mt-8"><button onClick={onClose} className="flex-1 py-3 border border-zinc-700 text-zinc-400 font-mono text-xs tracking-widest hover:bg-zinc-900 hover:text-white transition-colors">CANCEL</button><button onClick={onConfirm} disabled={isConfirmDisabled} className={`flex-1 py-3 bg-red-600 text-white font-bold font-mono text-xs tracking-widest hover:bg-red-500 transition-all ${isConfirmDisabled ? 'opacity-50 cursor-not-allowed' : 'shadow-[0_0_15px_rgba(220,38,38,0.5)]'}`}>CONFIRM</button></div>
+        {confirmationWord && (<div className="mt-6"><p className="text-xs text-center text-zinc-400 font-mono mb-2">To confirm, type "{confirmationWord}" below.</p><input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} className={`w-full ${bgColor} border ${borderColor} text-white text-center font-mono tracking-[0.3em] py-2 focus:outline-none focus:${borderColor} transition-colors uppercase`} placeholder={confirmationWord} /></div>)}
+        <div className="flex gap-4 mt-8"><button onClick={onClose} className="flex-1 py-3 border border-zinc-700 text-zinc-400 font-mono text-xs tracking-widest hover:bg-zinc-900 hover:text-white transition-colors">{cancelLabel}</button><button onClick={onConfirm} disabled={isConfirmDisabled} className={`flex-1 py-3 ${confirmButtonBg} ${confirmButtonText} font-bold font-mono text-xs tracking-widest transition-all ${isConfirmDisabled ? 'opacity-50 cursor-not-allowed' : confirmButtonShadow}`}>{confirmLabel}</button></div>
       </div>
     </div>
   );
@@ -83,28 +105,56 @@ const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
-  const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1, micRotationSpeed: 1 });
+  const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1, micRotationSpeed: 1, theme: 'system' });
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
-  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+  const [isStudyHubOpen, setIsStudyHubOpen] = useState(false);
+  const [isManageAccountsModalOpen, setIsManageAccountsModalOpen] = useState(false);
+
+  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [latency, setLatency] = useState<number | null>(null);
   const [isKeyValid, setIsKeyValid] = useState<boolean | null>(null);
 
   const recognitionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const activeAudioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const isProcessingRef = useRef(false);
+  const synthRef = useRef(window.speechSynthesis);
 
   useEffect(() => {
-    setIsKeyValid(!!(process.env.API_KEY && process.env.API_KEY.length > 10));
-    const initAudioContext = () => { if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(); };
-    window.addEventListener('click', initAudioContext, { once: true });
+    setIsKeyValid(!!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.length > 10));
     const savedUser = localStorage.getItem('nexa_user');
     if (savedUser) setUser(JSON.parse(savedUser));
     const savedConfig = localStorage.getItem('nexa_config');
     if (savedConfig) setConfig(prev => ({ ...prev, ...JSON.parse(savedConfig) }));
-    return () => window.removeEventListener('click', initAudioContext);
   }, []);
+
+  useEffect(() => {
+    const applyTheme = (theme: AppConfig['theme']) => {
+      const root = document.documentElement;
+      const isDark = (theme === 'dark') || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+      root.classList.toggle('dark', isDark);
+
+      if (isDark) {
+        root.style.setProperty('--grid-color', 'rgba(41, 223, 255, 0.1)');
+        root.style.setProperty('--vignette-mid', 'rgba(0,0,0,0.4)');
+        root.style.setProperty('--vignette-edge', 'rgba(0,0,0,0.9)');
+        root.style.setProperty('--scanline-color', 'rgba(0, 0, 0, 0.3)');
+      } else {
+        root.style.setProperty('--grid-color', 'rgba(0, 0, 0, 0.05)');
+        root.style.setProperty('--vignette-mid', 'rgba(255,255,255,0.2)');
+        root.style.setProperty('--vignette-edge', 'rgba(255,255,255,0.6)');
+        root.style.setProperty('--scanline-color', 'rgba(255, 255, 255, 0.3)');
+      }
+    };
+
+    applyTheme(config.theme);
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => { if (config.theme === 'system') { applyTheme('system'); } };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [config.theme]);
 
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -114,19 +164,63 @@ const App: React.FC = () => {
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'en-IN';
       recognitionRef.current.onstart = () => { playMicOnSound(); setHudState(HUDState.LISTENING); };
-      recognitionRef.current.onend = () => setHudState(currentState => { if (currentState === HUDState.LISTENING) { playMicOffSound(); return HUDState.IDLE; } return currentState; });
-      recognitionRef.current.onerror = (event: any) => { console.error("Speech Error", event); setHudState(HUDState.IDLE); playErrorSound(); };
-      recognitionRef.current.onresult = async (event: any) => {
+      
+      recognitionRef.current.onend = () => {
         playMicOffSound();
+        if (!isProcessingRef.current) {
+          setHudState(currentState => (currentState === HUDState.LISTENING ? HUDState.IDLE : currentState));
+        }
+      };
+
+      recognitionRef.current.onerror = (event: any) => { 
+        console.error("Speech Error", event); 
+        if (!isProcessingRef.current) setHudState(HUDState.IDLE); 
+        playErrorSound(); 
+      };
+
+      recognitionRef.current.onresult = async (event: any) => {
         let transcript = event.results[0][0].transcript.trim().replace(/naksha|naks|next a|neck sa|naxa/gi, 'Nexa').replace(/नक्शा/g, 'Nexa');
-        if (transcript) await processInput(transcript); else setHudState(HUDState.IDLE);
+        if (transcript) await processInput(transcript);
       };
     }
   }, [user]);
 
+  const speakText = useCallback((text: string) => {
+    if (!text || !synthRef.current) {
+        setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+        return;
+    }
+
+    synthRef.current.cancel(); // Cancel any ongoing speech
+
+    const lang = detectLanguage(text);
+    const preparedText = prepareTextForSpeech(text, lang);
+    const utterance = new SpeechSynthesisUtterance(preparedText);
+    
+    utterance.onstart = () => {
+        setHudState(HUDState.SPEAKING);
+    };
+
+    utterance.onend = () => {
+        if (!isProcessingRef.current) {
+            setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+        }
+    };
+    
+    utterance.onerror = (e) => {
+        console.error("Speech Synthesis Error", e);
+        if (!isProcessingRef.current) {
+            setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+        }
+    };
+    
+    synthRef.current.speak(utterance);
+  }, [isStudyHubOpen]);
+
   useEffect(() => {
-    if (user && messages.length === 0) {
+    if (user && messages.length === 0 && hudState === HUDState.IDLE && !isProcessingRef.current) {
       const init = async () => {
+        isProcessingRef.current = true;
         setHudState(HUDState.THINKING);
         let briefing = null;
         if (user.role === UserRole.ADMIN) {
@@ -139,32 +233,21 @@ const App: React.FC = () => {
         const introText = await generateIntroductoryMessage(user, briefing);
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         
-        let audioBuffer: AudioBuffer | null = null;
-        try {
-            const audioData = await generateSpeech(prepareTextForSpeech(introText));
-            if (audioData && audioContextRef.current) {
-                audioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
-            }
-        } catch (e) { console.error("Intro Audio Fetch Error", e); }
-        
         appendMessageToMemory(user, introMsg);
         setMessages([introMsg]);
-
-        if(audioBuffer) {
-          setHudState(HUDState.SPEAKING);
-          await playAudioBuffer(audioBuffer);
-        } else {
-          setHudState(HUDState.IDLE);
-        }
+        
+        speakText(introText);
+        isProcessingRef.current = false;
       };
       init();
     }
-  }, [user]);
+  }, [user, messages.length, hudState, speakText]);
 
   const handleLogin = (profile: UserProfile) => {
     setUser(profile);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     setMessages([]);
+    setHudState(HUDState.IDLE);
   };
 
   const handleLogout = () => {
@@ -177,14 +260,17 @@ const App: React.FC = () => {
   const handleMicClick = () => {
     if (hudState === HUDState.LISTENING) {
       recognitionRef.current?.stop();
-    } else if (hudState === HUDState.IDLE || hudState === HUDState.SPEAKING) {
-      activeAudioSourcesRef.current.forEach(source => { try { source.stop(); } catch (e) {} });
-      activeAudioSourcesRef.current.clear();
+    } else if (hudState === HUDState.IDLE || hudState === HUDState.SPEAKING || hudState === HUDState.STUDY_HUB) {
+      synthRef.current.cancel();
       try { recognitionRef.current?.start(); } catch (e) { console.error("Mic Start Error", e); setHudState(HUDState.IDLE); }
     }
   };
 
   const handleSettingsClick = () => {
+    if (isStudyHubOpen) {
+      setIsStudyHubOpen(false);
+      setHudState(HUDState.IDLE);
+    }
     if (user?.role === UserRole.ADMIN) {
       setIsAdminPanelOpen(true);
     } else {
@@ -192,8 +278,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleManageAccounts = () => {
+    setIsAdminPanelOpen(false);
+    setIsManageAccountsModalOpen(true);
+  };
+
+  const handleViewStudyHub = () => {
+    setIsAdminPanelOpen(false);
+    setIsStudyHubOpen(true);
+    setHudState(HUDState.STUDY_HUB);
+  };
+
   const processInput = async (text: string, isSecondPass: boolean = false) => {
-    if (!user || isProcessingRef.current) return;
+    if (!user || (isProcessingRef.current && !isSecondPass)) return;
     isProcessingRef.current = true;
 
     if (!isSecondPass) {
@@ -210,17 +307,11 @@ const App: React.FC = () => {
 
         if (responseText.includes("[THINKING]")) {
             const holdingText = responseText.split("[THINKING]")[0].trim();
-            const audioData = await generateSpeech(prepareTextForSpeech(holdingText));
+            const holdingMsg = { role: 'model' as const, text: holdingText, timestamp: Date.now() };
+            setMessages(prev => [...prev, holdingMsg]);
+            speakText(holdingText);
             
-            setMessages(prev => [...prev, { role: 'model', text: holdingText, timestamp: Date.now() }]);
-            
-            if (audioData && audioContextRef.current) {
-                setHudState(HUDState.SPEAKING);
-                await playAudioBuffer(pcmToAudioBuffer(audioData, audioContextRef.current));
-            }
-            
-            isProcessingRef.current = false;
-            await processInput(text, true);
+            await processInput(text, true); // Recursive call
             return;
         }
 
@@ -232,70 +323,33 @@ const App: React.FC = () => {
         }
 
         const isAngry = responseText.includes("[[STATE:ANGRY]]");
-        const isSinging = responseText.includes("[SING]");
         const cleanText = responseText.replace(/\[\[STATE:ANGRY\]\]|\[LOG_INCIDENT:.*?\]/g, "").trim();
         
-        let mainAudioBuffer: AudioBuffer | null = null;
-        let songAudioBuffer: AudioBuffer | null = null;
-
-        if (isSinging) {
-            const parts = cleanText.split("[SING]");
-            const introText = parts[0]?.trim();
-            const songText = parts[1]?.trim();
-
-            if (introText) {
-                const introAudioData = await generateSpeech(prepareTextForSpeech(introText), { isAngry });
-                if (introAudioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(introAudioData, audioContextRef.current);
-            }
-            if (songText) {
-                const lyricsAudioData = await generateSpeech(prepareTextForSpeech(songText), { voiceName: 'Zephyr' });
-                if (lyricsAudioData && audioContextRef.current) songAudioBuffer = pcmToAudioBuffer(lyricsAudioData, audioContextRef.current);
-            }
-        } else {
-            const audioData = await generateSpeech(prepareTextForSpeech(cleanText), { isAngry });
-            if (audioData && audioContextRef.current) mainAudioBuffer = pcmToAudioBuffer(audioData, audioContextRef.current);
-        }
-
-        const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace("[SING]", "\n\n"), timestamp: Date.now(), isAngry };
+        const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace(/\[SING\]/g, "\n\n"), timestamp: Date.now(), isAngry };
         appendMessageToMemory(user, modelMsg);
         setMessages(prev => [...prev, modelMsg]);
-        setHudState(isAngry ? HUDState.ANGRY : HUDState.SPEAKING);
-      
-        if (mainAudioBuffer) await playAudioBuffer(mainAudioBuffer);
-        if (songAudioBuffer) await playAudioBuffer(songAudioBuffer);
-      
-        if (activeAudioSourcesRef.current.size === 0) setHudState(HUDState.IDLE);
+        
+        setHudState(isAngry ? HUDState.WARNING : HUDState.SPEAKING);
+
+        speakText(cleanText);
+        
     } catch (error: any) {
         console.error("Processing Error", error);
-        setHudState(HUDState.IDLE); playErrorSound();
+        setHudState(HUDState.IDLE); 
+        playErrorSound();
         const errorText = (error.message?.includes('API_KEY')) ? "SYSTEM ALERT: API Access Key invalid or missing." : "I encountered an internal error.";
         setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
     } finally {
         isProcessingRef.current = false;
     }
   };
-
-  const playAudioBuffer = (buffer: AudioBuffer) => new Promise<void>(async (resolve) => {
-    if (!audioContextRef.current) return resolve();
-    if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContextRef.current.destination);
-    activeAudioSourcesRef.current.add(source);
-    source.start(0);
-    source.onended = () => {
-        activeAudioSourcesRef.current.delete(source);
-        if (activeAudioSourcesRef.current.size === 0) setHudState(HUDState.IDLE);
-        resolve();
-    };
-  });
-
+  
   if (isKeyValid === null) return <div className="w-full h-full bg-black"></div>;
   if (!isKeyValid) return <ConfigError />;
   if (!user) return <Auth onLogin={handleLogin} />;
 
   return (
-    <div className="relative w-full h-full bg-black flex flex-col overflow-hidden font-sans select-none">
+    <div className="relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden font-sans select-none transition-colors duration-500">
       <div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div>
       <StatusBar userName={user.name} onLogout={handleLogout} onSettings={handleSettingsClick} latency={latency} />
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
@@ -305,12 +359,33 @@ const App: React.FC = () => {
       <ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.animationsEnabled ? (config.micRotationSpeed || 1) : 0} />
       
       {user.role === UserRole.ADMIN ? (
-        <AdminPanel isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} onManageAccounts={() => {}} />
+        <AdminPanel 
+          isOpen={isAdminPanelOpen} 
+          onClose={() => setIsAdminPanelOpen(false)} 
+          config={config} 
+          onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} 
+          onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} 
+          onManageAccounts={handleManageAccounts} 
+          onViewStudyHub={handleViewStudyHub}
+        />
       ) : (
         <UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={(newConfig) => { setConfig(newConfig); localStorage.setItem('nexa_config', JSON.stringify(newConfig)); }} />
       )}
 
-      <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({...confirmModal, isOpen: false}); }} onClose={() => setConfirmModal({...confirmModal, isOpen: false})} confirmationWord={confirmModal.confirmationWord} />
+      <StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(HUDState.IDLE); }} />
+      <ManageAccountsModal isOpen={isManageAccountsModalOpen} onClose={() => setIsManageAccountsModalOpen(false)} />
+
+      <ConfirmationModal 
+        isOpen={confirmModal.isOpen} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+        onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({...confirmModal, isOpen: false}); }} 
+        onClose={() => setConfirmModal({...confirmModal, isOpen: false})} 
+        confirmationWord={confirmModal.confirmationWord} 
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel={confirmModal.cancelLabel}
+        variant={confirmModal.variant}
+      />
     </div>
   );
 };

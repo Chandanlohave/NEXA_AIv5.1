@@ -40,16 +40,15 @@ export const appendMessageToMemory = (user: UserProfile, message: ChatMessage): 
     saveMemory(user, currentMemory);
 };
 
-export const getMemoryForPrompt = (user: UserProfile): {role: string, parts: {text: string}[]}[] => {
+export const getMemoryForPrompt = (user: UserProfile): {role: 'user' | 'assistant', content: string}[] => {
     const memory = loadMemory(user);
-    // Return the last N messages, formatted for the Gemini API
+    // Return the last N messages, formatted for the Groq/OpenAI API
     const fullHistory = memory.slice(-MAX_MEMORY_LENGTH).map(msg => ({
-        role: msg.role,
-        parts: [{ text: msg.text }]
+        role: msg.role === 'model' ? 'assistant' as const : 'user' as const,
+        content: msg.text
     }));
 
-    // The Gemini API requires conversation history to start with a 'user' role.
-    // Find the index of the first user message.
+    // The API requires conversation history to start with a 'user' role.
     const firstUserIndex = fullHistory.findIndex(msg => msg.role === 'user');
 
     // If no user message is found (e.g., only the intro 'model' message exists),

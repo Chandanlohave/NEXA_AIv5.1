@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { HUDState } from '../types';
 
@@ -27,12 +25,18 @@ const HUD: React.FC<HUDProps> = ({ state, rotationSpeed = 1 }) => {
     borderColor = "border-nexa-yellow";
     shadowColor = "shadow-nexa-yellow";
     bgGlow = "bg-nexa-yellow";
-  } else if (state === HUDState.ANGRY) {
+  } else if (state === HUDState.WARNING) { // Changed from ANGRY
     primaryColor = "text-nexa-red";
     borderColor = "border-nexa-red";
     shadowColor = "shadow-nexa-red";
     bgGlow = "bg-nexa-red";
     animationSpeedMultiplier = 2.5; // Faster, more erratic animations
+  } else if (state === HUDState.STUDY_HUB) { // New state
+    primaryColor = "text-nexa-blue";
+    borderColor = "border-nexa-blue";
+    shadowColor = "shadow-nexa-blue";
+    bgGlow = "bg-nexa-blue";
+    animationSpeedMultiplier = 0.8; // Slightly slower, calm animation
   }
 
   // Common glow classes
@@ -40,7 +44,7 @@ const HUD: React.FC<HUDProps> = ({ state, rotationSpeed = 1 }) => {
   const intenseGlow = `shadow-[0_0_30px_rgba(var(--tw-shadow-color),0.8)] ${shadowColor}`;
 
   return (
-    <div className={`relative flex items-center justify-center transition-all duration-500 ${state === HUDState.SPEAKING || state === HUDState.ANGRY ? 'scale-105' : 'scale-100'}`}>
+    <div className={`relative flex items-center justify-center transition-all duration-500 ${state === HUDState.SPEAKING || state === HUDState.WARNING ? 'scale-105' : 'scale-100'}`}>
       
       {/* --- LEFT SIDE HOLOGRAM (Mini Rings) --- */}
       <div className={`hidden xs:flex flex-col items-end mr-3 opacity-80 transition-opacity duration-500`}>
@@ -65,7 +69,7 @@ const HUD: React.FC<HUDProps> = ({ state, rotationSpeed = 1 }) => {
       <div className="relative w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center">
         
         {/* 1. Outer Glow Container */}
-        <div className={`absolute inset-0 rounded-full ${intenseGlow} ${state === HUDState.ANGRY ? 'opacity-40' : 'opacity-20'} blur-xl transition-all duration-500`}></div>
+        <div className={`absolute inset-0 rounded-full ${intenseGlow} ${state === HUDState.WARNING ? 'opacity-40' : 'opacity-20'} blur-xl transition-all duration-500`}></div>
 
         {/* 2. Outer Ring - Thick Dashed with Gap */}
         <div 
@@ -95,24 +99,24 @@ const HUD: React.FC<HUDProps> = ({ state, rotationSpeed = 1 }) => {
         ></div>
 
         {/* 6. Static/Pulsing Core */}
-        <div className={`absolute w-[45%] h-[45%] rounded-full border ${borderColor} transition-all duration-500 ${state === HUDState.SPEAKING ? `${animationsEnabled ? 'animate-pulse-fast' : ''} bg-white/5 opacity-50` : 'opacity-30'} ${state === HUDState.IDLE && animationsEnabled ? 'animate-breathing' : ''} ${state === HUDState.ANGRY ? `${animationsEnabled ? 'animate-pulse-fast' : ''} bg-red-500/10` : ''}`}></div>
+        <div className={`absolute w-[45%] h-[45%] rounded-full border ${borderColor} transition-all duration-500 ${state === HUDState.SPEAKING ? `${animationsEnabled ? 'animate-pulse-fast' : ''} bg-white/5 opacity-50` : 'opacity-30'} ${state === HUDState.IDLE && animationsEnabled ? 'animate-breathing' : ''} ${state === HUDState.WARNING ? `${animationsEnabled ? 'animate-pulse-fast' : ''} bg-red-500/10` : ''} ${state === HUDState.STUDY_HUB ? `${animationsEnabled ? 'animate-pulse' : ''} bg-nexa-blue/10` : ''}`}></div>
 
-        {/* 7. Center Text */}
-        <div className={`relative z-10 text-3xl sm:text-4xl font-light tracking-[0.15em] ${primaryColor} font-mono transition-colors duration-500 drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]`}>
-          NEXA
+        {/* 7. Center Text: Display current HUD state */}
+        <div className={`relative z-10 text-xl sm:text-2xl font-light tracking-[0.1em] ${primaryColor} font-mono transition-colors duration-500 dark:drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]`}>
+          {state.toUpperCase()}
         </div>
 
-        {/* 7b. STATUS TEXT */}
-        <div className={`absolute mt-20 text-[9px] sm:text-[10px] tracking-[0.3em] font-mono ${primaryColor} ${animationsEnabled ? 'animate-pulse' : ''} uppercase opacity-80`}>
+        {/* 7b. STATUS TEXT (Removed as state is now in the center) */}
+        {/* <div className={`absolute mt-20 text-[9px] sm:text-[10px] tracking-[0.3em] font-mono ${primaryColor} ${animationsEnabled ? 'animate-pulse' : ''} uppercase opacity-80`}>
            {state}
-        </div>
+        </div> */}
         
         {/* 8. Micro-ornaments (Top/Bottom) */}
         <div className={`absolute top-1 w-[1px] h-3 ${bgGlow} opacity-50`}></div>
         <div className={`absolute bottom-1 w-[1px] h-3 ${bgGlow} opacity-50`}></div>
 
-        {/* Waveform Visualization (Speaking & Angry) */}
-        {(state === HUDState.SPEAKING || state === HUDState.ANGRY) && animationsEnabled && (
+        {/* Waveform Visualization (Speaking & WARNING) */}
+        {(state === HUDState.SPEAKING || state === HUDState.WARNING) && animationsEnabled && (
            <>
              <div className={`absolute inset-0 rounded-full border-2 ${borderColor} opacity-40 animate-ping`}></div>
              <div className={`absolute inset-4 rounded-full border ${borderColor} opacity-20 animate-ping delay-75`}></div>
