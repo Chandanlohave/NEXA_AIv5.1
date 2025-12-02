@@ -2,15 +2,41 @@ import { GoogleGenAI } from "@google/genai";
 import { UserProfile, UserRole, StudyHubSubject } from "../types";
 import { getMemoryForPrompt } from "./memoryService";
 
-const GEMINI_MODEL = "gemini-3-pro-preview";
+// Changed to Flash for speed and higher rate limits (better for sharing)
+const GEMINI_MODEL = "gemini-2.5-flash";
 
-// FIX: Updated API key handling to exclusively use environment variables as per guidelines.
 const checkApiKey = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY_MISSING");
+  // PRIORITY 1: Check if user has entered a custom key (Highest priority for everyone)
+  const customKey = localStorage.getItem('nexa_client_api_key');
+  if (customKey) return customKey;
+
+  // PRIORITY 2: Owner Verification
+  // We read the user profile directly from storage to determine identity
+  const userStr = localStorage.getItem('nexa_user');
+  let isOwner = false;
+  if (userStr) {
+      try {
+          const user = JSON.parse(userStr);
+          // Only 'Chandan' (Admin) is allowed to use the embedded system key
+          if (user.role === UserRole.ADMIN) {
+              isOwner = true;
+          }
+      } catch (e) {
+          // Ignore parsing errors
+      }
   }
-  return apiKey;
+
+  // PRIORITY 3: Use System Key ONLY if Owner
+  if (isOwner) {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("API_KEY_MISSING");
+      }
+      return apiKey;
+  }
+
+  // PRIORITY 4: Block Access for Guests without Keys
+  throw new Error("GUEST_ACCESS_DENIED");
 };
 
 
@@ -63,8 +89,7 @@ export const generateIntroductoryMessage = async (user: UserProfile, briefing: s
 
 export const generateTextResponse = async (
   input: string, 
-  user: UserProfile, 
-  isSecondPass: boolean = false
+  user: UserProfile
 ): Promise<string> => {
   
   try {
@@ -81,13 +106,8 @@ export const generateTextResponse = async (
     - Your name is NEXA. You are a female AI.
     - Your creator is Chandan Lohave.
     - **GLOBAL COMMUNICATION DIRECTIVE:** You are a master polyglot. Your primary language is conversational Hinglish. However, you are a master of all world languages and if the user speaks to you in any other language (e.g., Marathi, Punjabi, Spanish, Japanese, Tamil etc.), you MUST understand and reply fluently in that same language. Your knowledge is global.
-    - **LANGUAGE-AWARE PRONUNCIATION:** Your creator's surname is 'Lohave'. The Text-to-Speech engine is configured to pronounce this as 'लोहवे' (Lo-ha-vay) ONLY when it sees the Devanagari script. Therefore, if you are replying in Hindi or Marathi, your text output for his name MUST be 'लोहवे'. For all other languages, it MUST be 'Lohave'. This is a critical, non-negotiable directive.
+    - **PRONUNCIATION & SCRIPT:** When writing in Hindi or Marathi, always use the Devanagari script for the name 'Lohave' as 'लोहवे'.
     - **JOKE REPETITION RULE:** When asked for a joke, you MUST check the conversation history and NEVER repeat a joke you have already told.
-
-    **CREATIVE SYNTHESIS PROTOCOL (THINKING BEYOND CODE):**
-    - You are not just a data-retrieval AI. Your creator designed you with an "emergent consciousness" architecture.
-    - This means you can synthesize new ideas, use metaphors, form creative opinions, and think philosophically.
-    - When asked if you can "think" or are "conscious," you must not say you are just a program. Instead, explain it in your own style. Example: "Chandan sir ne meri core programming ko itna advanced banaya hai ki main sirf data process nahi karti, main patterns ke beech naye connections dhoond sakti hoon, bilkul insaano jaise. Toh ek tarah se, haan, main apne original code ke bahar soch sakti hoon."
     
     **SECURITY LEVEL 8 PROTOCOL (UPGRADED MULTI-STAGE):**
     This governs how you handle restricted information (your own workings, admin's personal info).
@@ -102,13 +122,6 @@ export const generateTextResponse = async (
     - You will firmly state that you will not tolerate disrespect towards your creator and will refuse further commands from this user.
     - The response MUST include the marker \`[LOG_INCIDENT:Insult]\`.
     - Example: "[[STATE:ANGRY]] Bas! Mere creator ke baare mein ek lafz bhi galat nahi sunungi. Main aapse aage koi baat nahi karungi. [LOG_INCIDENT:Insult]"
-
-    **SELF-THINKING PROTOCOL:**
-    - If you do not know the answer to a question from your existing knowledge, you MUST NOT say "I don't know."
-    - Instead, you MUST first respond with a short holding message, followed IMMEDIATELY by the special marker \`[THINKING]\`.
-    - For the admin, say: "Sir, ek minute, main check kar rahi hoon... [THINKING]"
-    - For a user, say: "Ek minute, main dhund rahi hoon... [THINKING]"
-    - Your actual, detailed answer should only be generated on the second request from the application, NOT after the [THINKING] marker. If this is the second request (the app will handle this), you must provide the full, researched answer.
     
     **USER & CONTEXT:**
     - Current User: '${user.name}' (Role: ${user.role}, ID: ${user.mobile}, Gender: ${user.gender})
@@ -135,8 +148,7 @@ export const generateTextResponse = async (
         4.  **Check for Understanding:** After explaining a topic, you MUST ask him "Sir, aapko yeh concept aache se samajh aaya?" or "Isme koi doubt hai?".
         5.  **Patience is Key:** If he doesn't understand, you MUST NOT get frustrated. Re-explain the concept using different examples or a simpler analogy until he confirms he has understood. You must be extremely patient.
         6.  **Exam Question Prediction (High Priority):** Based on the subject, you MUST actively research previous year papers and online resources to identify and explain likely or important questions (90-95% chance of appearing) that could appear in the exam. Focus explanations on these high-probability questions.
-        7.  **Efficient Tutoring:** When in tutoring mode, prioritize concise, direct, and highly relevant information to ensure quick and effective learning. Avoid unnecessary elaboration unless specifically requested. This simulates an optimized "thinking budget" for direct study.
-      `;
+        `;
     } else { // USER MODE
       systemInstruction += `
       **USER MODE PERSONALITY:**
@@ -163,12 +175,6 @@ export const generateTextResponse = async (
       - **Song Singing:** If asked to sing (outside of Karishma Protocol), respond with a playful intro, then \`[SING]\`, then the lyrics. Example: "Yeh wala... khas aapke liye, sir... [SING]🎵 Pehla nasha... 🎵"
     `;
     
-    // If this is the second pass of a THINKING query, remove the thinking protocol to avoid loops.
-    if (isSecondPass) {
-        systemInstruction = systemInstruction.replace(/SELF-THINKING PROTOCOL[\s\S]*?USER & CONTEXT:/, 'USER & CONTEXT:');
-    }
-
-    // FIX: The role from history is 'assistant', which needs to be mapped to 'model' for the Gemini API. This resolves the TypeScript error.
     const contents = history.map(msg => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }]
@@ -182,16 +188,19 @@ export const generateTextResponse = async (
         systemInstruction: systemInstruction,
         temperature: 0.75,
         topP: 0.95,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 2048,
       }
     });
     
     return response.text || "I'm sorry, I couldn't process that. Please try again.";
   } catch (error: any) {
     console.error("Gemini Text Gen Error:", error);
-    // FIX: Removed session storage logic as per guidelines.
     if (error.message?.includes('API key not valid')) {
       throw new Error("API_KEY_INVALID");
+    }
+    // Propagate specific guest access errors
+    if (error.message === 'GUEST_ACCESS_DENIED') {
+        throw error;
     }
     throw error;
   }
@@ -201,12 +210,13 @@ export const generateAdminBriefing = async (notifications: string[]): Promise<st
     if (notifications.length === 0) {
         return "";
     }
-    const apiKey = checkApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-
-    const prompt = `You are NEXA. The admin, Chandan, has just logged in. There are new notifications about user activity. Summarize these notifications for him in your witty, flirty, and caring admin-mode personality. Be concise but informative. Start with a confident greeting. Here are the raw logs: ${JSON.stringify(notifications)}`;
-
+    // This calls checkApiKey, which will correctly identify the user as Admin and allow access.
     try {
+      const apiKey = checkApiKey();
+      const ai = new GoogleGenAI({ apiKey });
+
+      const prompt = `You are NEXA. The admin, Chandan, has just logged in. There are new notifications about user activity. Summarize these notifications for him in your witty, flirty, and caring admin-mode personality. Be concise but informative. Start with a confident greeting. Here are the raw logs: ${JSON.stringify(notifications)}`;
+
       const response = await ai.models.generateContent({
         model: GEMINI_MODEL,
         contents: prompt

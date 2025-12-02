@@ -4,11 +4,34 @@ let audioCtx: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
 
 const checkApiKey = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY_MISSING");
+  // PRIORITY 1: Check if user has entered a custom key (Highest priority)
+  const customKey = localStorage.getItem('nexa_client_api_key');
+  if (customKey) return customKey;
+
+  // PRIORITY 2: Owner Verification
+  const userStr = localStorage.getItem('nexa_user');
+  let isOwner = false;
+  if (userStr) {
+      try {
+          const user = JSON.parse(userStr);
+          // Only 'ADMIN' role gets to use the system key
+          if (user.role === 'ADMIN') {
+              isOwner = true;
+          }
+      } catch (e) {}
   }
-  return apiKey;
+
+  // PRIORITY 3: Use System Key ONLY if Owner
+  if (isOwner) {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("API_KEY_MISSING");
+      }
+      return apiKey;
+  }
+
+  // PRIORITY 4: Block Access
+  throw new Error("GUEST_ACCESS_DENIED");
 };
 
 const initAudioContext = () => {
@@ -61,9 +84,16 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
 
+        // IMPORTANT: Instructions for TTS are embedded in the prompt to correct pronunciation
+        const ttsPrompt = `
+        Say the following text in a slightly enthusiastic, female, Indian-English voice. 
+        CRITICAL PRONUNCIATION RULE: If the name "Lohave" appears, you MUST pronounce it as "Lo-ha-vay" (rhymes with 'way'), NOT "Lo-have". 
+        
+        Text to speak: "${text}"`;
+
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text: `Say it in a slightly enthusiastic, female, Indian-English voice: ${text}` }] }],
+            contents: [{ parts: [{ text: ttsPrompt }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
@@ -100,6 +130,11 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         console.error("Gemini TTS Error:", error);
         if (error.message?.includes('API key not valid')) {
             throw new Error("API_KEY_INVALID");
+        }
+        // Silence GUEST_ACCESS_DENIED errors in the console to avoid spam, 
+        // as this is an expected behavior for non-authorized users.
+        if (error.message !== 'GUEST_ACCESS_DENIED') {
+           console.error("TTS failed", error);
         }
         onEnd();
     }

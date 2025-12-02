@@ -100,7 +100,9 @@ const App: React.FC = () => {
 
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [latency, setLatency] = useState<number | null>(null);
-  const [isKeyValid, setIsKeyValid] = useState<boolean>(() => !!process.env.API_KEY);
+  
+  // FIX: Allow app to run if EITHER env key is present OR user stored a custom key
+  const [isKeyValid, setIsKeyValid] = useState<boolean>(() => !!process.env.API_KEY || !!localStorage.getItem('nexa_client_api_key'));
 
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
@@ -269,31 +271,20 @@ const App: React.FC = () => {
     setHudState(HUDState.STUDY_HUB);
   };
 
-  const processInput = async (text: string, isSecondPass: boolean = false) => {
-    if (!user || (isProcessingRef.current && !isSecondPass)) return;
+  const processInput = async (text: string) => {
+    if (!user || isProcessingRef.current) return;
     isProcessingRef.current = true;
 
-    if (!isSecondPass) {
-        const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
-        appendMessageToMemory(user, userMsg);
-        setMessages(prev => [...prev, userMsg]);
-    }
+    const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
+    appendMessageToMemory(user, userMsg);
+    setMessages(prev => [...prev, userMsg]);
+    
     setHudState(HUDState.THINKING);
 
     const startTime = Date.now();
     try {
-        const responseText = await generateTextResponse(text, user, isSecondPass);
+        const responseText = await generateTextResponse(text, user);
         setLatency(Date.now() - startTime);
-
-        if (responseText.includes("[THINKING]")) {
-            const holdingText = responseText.split("[THINKING]")[0].trim();
-            const holdingMsg = { role: 'model' as const, text: holdingText, timestamp: Date.now() };
-            setMessages(prev => [...prev, holdingMsg]);
-            speakText(holdingText);
-            
-            await processInput(text, true); // Recursive call
-            return;
-        }
 
         if (responseText.includes("[LOG_INCIDENT:Insult]") || responseText.includes("[LOG_INCIDENT:Query]")) {
             const notifications = getAdminNotifications();
@@ -318,10 +309,15 @@ const App: React.FC = () => {
         setHudState(HUDState.IDLE); 
         playErrorSound();
         let errorText = "I encountered an internal error. Please try again.";
+        
         if (error.message?.includes('API_KEY_MISSING') || error.message?.includes('API_KEY_INVALID')) {
             errorText = "SYSTEM ALERT: Gemini API Access Key is missing or invalid.";
             setIsKeyValid(false);
+        } else if (error.message === 'GUEST_ACCESS_DENIED') {
+            // Specific user-friendly message for guests
+            errorText = "ACCESS RESTRICTED: You are in Guest Mode. Please enter your own Gemini API Key in Settings to continue. My creator's quota is protected.";
         }
+
         setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
     } finally {
         isProcessingRef.current = false;
