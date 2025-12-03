@@ -84,9 +84,20 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
 
-        // IMPORTANT: Instructions for TTS are embedded in the prompt to correct pronunciation
+        // Updated Prompt: Universal Language Support
         const ttsPrompt = `
-        Say the following text in a slightly enthusiastic, female, Indian-English voice. 
+        You are a highly advanced multilingual voice engine.
+        Task: Read the following text aloud with the correct native accent.
+        
+        Guidelines:
+        1. **Detect Language:** Analyze the text to determine its language (e.g., Hindi, Marathi, Tamil, Spanish, French, English).
+        2. **Native Accent:** 
+           - If the text is Indian (Hindi, Marathi, Tamil, Telugu, Punjabi, Kannada, etc.) or Hinglish, use a **natural Indian female accent**.
+           - If the text is Spanish, use a **native Spanish female accent**.
+           - If the text is French, use a **native French female accent**.
+           - (Apply this logic for ANY language detected).
+        3. **Pronunciation:** Ensure names and regional words are pronounced accurately according to their origin.
+        
         CRITICAL PRONUNCIATION RULE: If the name "Lohave" appears, you MUST pronounce it as "Lo-ha-vay" (rhymes with 'way'), NOT "Lo-have". 
         
         Text to speak: "${text}"`;
@@ -131,8 +142,6 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         if (error.message?.includes('API key not valid')) {
             throw new Error("API_KEY_INVALID");
         }
-        // Silence GUEST_ACCESS_DENIED errors in the console to avoid spam, 
-        // as this is an expected behavior for non-authorized users.
         if (error.message !== 'GUEST_ACCESS_DENIED') {
            console.error("TTS failed", error);
         }

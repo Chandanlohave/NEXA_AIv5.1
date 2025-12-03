@@ -180,20 +180,29 @@ const App: React.FC = () => {
     }
   }, [user]);
 
-  const speakText = useCallback((text: string) => {
+  // Modified speakText to handle state transitions via callbacks
+  const speakText = useCallback((text: string, warningState: boolean = false) => {
     if (!text) {
         setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+        isProcessingRef.current = false;
         return;
     }
 
     speakTextTTS(
         text,
         () => {
-            setHudState(HUDState.SPEAKING);
+            // onStart: Audio is starting to play
+            setHudState(warningState ? HUDState.WARNING : HUDState.SPEAKING);
         },
         () => {
+            // onEnd: Audio has finished playing
             if (!isProcessingRef.current) {
-                setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+               // Should not happen as processing is true, but safe guard
+               setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
+            } else {
+               // Processing was held true to prevent IDLE state, now we release
+               isProcessingRef.current = false;
+               setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
             }
         }
     );
@@ -218,8 +227,8 @@ const App: React.FC = () => {
         appendMessageToMemory(user, introMsg);
         setMessages([introMsg]);
         
+        // Pass to speakText, which will handle the unlock of isProcessingRef
         speakText(introText);
-        isProcessingRef.current = false;
       };
       init();
     }
@@ -300,9 +309,10 @@ const App: React.FC = () => {
         appendMessageToMemory(user, modelMsg);
         setMessages(prev => [...prev, modelMsg]);
         
-        setHudState(isAngry ? HUDState.WARNING : HUDState.SPEAKING);
-
-        speakText(cleanText);
+        // CRITICAL FIX: Do NOT set state to IDLE here. Do NOT set isProcessingRef to false here.
+        // We pass the responsibility to speakText. 
+        // It will keep the state as THINKING until audio starts, then SPEAKING, then IDLE only when audio ends.
+        speakText(cleanText, isAngry);
         
     } catch (error: any) {
         console.error("Processing Error", error);
@@ -314,12 +324,11 @@ const App: React.FC = () => {
             errorText = "SYSTEM ALERT: Gemini API Access Key is missing or invalid.";
             setIsKeyValid(false);
         } else if (error.message === 'GUEST_ACCESS_DENIED') {
-            // Specific user-friendly message for guests
             errorText = "ACCESS RESTRICTED: You are in Guest Mode. Please enter your own Gemini API Key in Settings to continue. My creator's quota is protected.";
         }
 
         setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
-    } finally {
+        // In case of error, we must release the lock immediately
         isProcessingRef.current = false;
     }
   };
