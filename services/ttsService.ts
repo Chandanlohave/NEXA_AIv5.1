@@ -84,21 +84,14 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
 
-        // Updated Prompt: Universal Language Support
+        // Updated Prompt: Simplified and Direct
         const ttsPrompt = `
-        You are a highly advanced multilingual voice engine.
-        Task: Read the following text aloud with the correct native accent.
+        You are a voice engine. 
+        Task: Read the following text aloud using the detected language's native accent (Hindi, Marathi, Tamil, Telugu, Punjabi, Malayalam, English, etc.).
         
-        Guidelines:
-        1. **Detect Language:** Analyze the text to determine its language (e.g., Hindi, Marathi, Tamil, Spanish, French, English).
-        2. **Native Accent:** 
-           - If the text is Indian (Hindi, Marathi, Tamil, Telugu, Punjabi, Kannada, etc.) or Hinglish, use a **natural Indian female accent**.
-           - If the text is Spanish, use a **native Spanish female accent**.
-           - If the text is French, use a **native French female accent**.
-           - (Apply this logic for ANY language detected).
-        3. **Pronunciation:** Ensure names and regional words are pronounced accurately according to their origin.
-        
-        CRITICAL PRONUNCIATION RULE: If the name "Lohave" appears, you MUST pronounce it as "Lo-ha-vay" (rhymes with 'way'), NOT "Lo-have". 
+        **PRONUNCIATION RULE:**
+        - The name "Lohave" must be pronounced exactly as the Hindi word **"लोहवे"**.
+        - Do not Anglicize it. Just say **"लोहवे"**.
         
         Text to speak: "${text}"`;
 
