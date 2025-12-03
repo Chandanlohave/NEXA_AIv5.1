@@ -75,6 +75,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
   const [initStatusText, setInitStatusText] = useState('TAP TO CONNECT');
 
+  // New check: Is a system key present?
+  const hasSystemKey = !!process.env.API_KEY;
+  const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
+  const isFullyOffline = !hasSystemKey && !hasCustomKey;
+
   useEffect(() => {
     const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_KEY', 'NEXA_PROTOCOL'];
     const statusTexts = ['CALIBRATING_NEURAL_NET...', 'SYNCING_CHRONO_DRIVES...', 'AWAITING_CONNECTION...'];
@@ -101,6 +106,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   const initiateSystem = () => {
+    // If no keys are present at all, force the user to input a key
+    if (isFullyOffline) {
+        playErrorSound();
+        setMode('KEY_INPUT');
+        setError('// SYSTEM ALERT: NO API KEY DETECTED. PLEASE ENTER KEY.');
+        return;
+    }
+
     playStartupSound();
     setLoading(true);
     setInitStatusText('CONNECTION_ESTABLISHED');
@@ -159,8 +172,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setMode('ADMIN');
   };
 
-  const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
-
   return (
     <div className="fixed inset-0 bg-zinc-100 dark:bg-black flex flex-col items-center justify-center p-6 z-[60] overflow-hidden transition-colors duration-500">
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
@@ -200,6 +211,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <div className="text-zinc-500 dark:text-nexa-cyan/60 text-xs font-mono tracking-[0.3em] group-hover:text-nexa-cyan transition-colors">{loading ? 'INITIALIZING...' : initStatusText}</div>
               </div>
               {hasCustomKey && <div className="mt-4 px-2 py-1 bg-nexa-cyan/10 border border-nexa-cyan/30 text-[9px] text-nexa-cyan tracking-widest font-mono">USING CUSTOM KEY</div>}
+              {isFullyOffline && !hasCustomKey && <div className="mt-4 px-2 py-1 bg-red-500/10 border border-red-500/30 text-[9px] text-red-500 tracking-widest font-mono animate-pulse">OFFLINE MODE</div>}
             </div>
           )}
 

@@ -4,7 +4,7 @@ import HUD from './components/HUD';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
-import ConfigError from './components/ConfigError';
+// ConfigError is no longer used as a blocking screen
 import StudyHubPanel from './components/StudyHubPanel';
 import ManageAccountsModal from './components/ManageAccountsModal';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
@@ -101,9 +101,9 @@ const App: React.FC = () => {
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [latency, setLatency] = useState<number | null>(null);
   
-  // FIX: Allow app to run if EITHER env key is present OR user stored a custom key
-  const [isKeyValid, setIsKeyValid] = useState<boolean>(() => !!process.env.API_KEY || !!localStorage.getItem('nexa_client_api_key'));
-
+  // We no longer strictly validate the key on startup. We let the Auth component handle "missing key" scenarios.
+  // This prevents the app from being bricked if no env key is present.
+  
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
   
@@ -180,8 +180,6 @@ const App: React.FC = () => {
     }
   }, [user]);
 
-  // Modified speakText to accept an onAudioStart callback
-  // This callback is triggered when the audio actually begins playing
   const speakText = useCallback((text: string, warningState: boolean = false, onAudioStart?: () => void) => {
     if (!text) {
         setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
@@ -192,13 +190,10 @@ const App: React.FC = () => {
     speakTextTTS(
         text,
         () => {
-            // onStart: Audio is starting to play
-            // Execute the callback to show text (if provided)
             if (onAudioStart) onAudioStart();
             setHudState(warningState ? HUDState.WARNING : HUDState.SPEAKING);
         },
         () => {
-            // onEnd: Audio has finished playing
             if (!isProcessingRef.current) {
                setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
             } else {
@@ -222,15 +217,26 @@ const App: React.FC = () => {
                 clearAdminNotifications();
             }
         }
-        const introText = await generateIntroductoryMessage(user, briefing);
-        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         
-        appendMessageToMemory(user, introMsg);
-        // Important: We don't setMessages here immediately. We wait for speakText to start.
-        
-        speakText(introText, false, () => {
-            setMessages([introMsg]);
-        });
+        // Handle "Missing Key" gracefully during Intro
+        try {
+            const introText = await generateIntroductoryMessage(user, briefing);
+            const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
+            appendMessageToMemory(user, introMsg);
+            speakText(introText, false, () => {
+                setMessages([introMsg]);
+            });
+        } catch (error: any) {
+             console.error("Intro Error", error);
+             let errorText = "Initial connection failed. Please check your network.";
+             if (error.message?.includes('API_KEY_MISSING') || error.message?.includes('API_KEY_INVALID') || error.message === 'GUEST_ACCESS_DENIED') {
+                 errorText = "NEXA SYSTEM ALERT: API Key is missing. Please enter your Custom API Key in Settings to activate the system.";
+             }
+             const errMsg: ChatMessage = { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true };
+             setMessages([errMsg]);
+             isProcessingRef.current = false;
+             setHudState(HUDState.IDLE);
+        }
       };
       init();
     }
@@ -309,9 +315,7 @@ const App: React.FC = () => {
         
         const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace(/\[SING\]/g, "\n\n"), timestamp: Date.now(), isAngry };
         appendMessageToMemory(user, modelMsg);
-        // Note: Removed setMessages from here. It is now called inside speakText callback.
         
-        // Pass the callback to update UI only when audio starts
         speakText(cleanText, isAngry, () => {
             setMessages(prev => [...prev, modelMsg]);
         });
@@ -323,19 +327,16 @@ const App: React.FC = () => {
         let errorText = "I encountered an internal error. Please try again.";
         
         if (error.message?.includes('API_KEY_MISSING') || error.message?.includes('API_KEY_INVALID')) {
-            errorText = "SYSTEM ALERT: Gemini API Access Key is missing or invalid.";
-            setIsKeyValid(false);
+            errorText = "SYSTEM ALERT: Gemini API Access Key is missing or invalid. Please check your configuration.";
         } else if (error.message === 'GUEST_ACCESS_DENIED') {
             errorText = "ACCESS RESTRICTED: You are in Guest Mode. Please enter your own Gemini API Key in Settings to continue. My creator's quota is protected.";
         }
 
         setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
-        // In case of error, we must release the lock immediately
         isProcessingRef.current = false;
     }
   };
   
-  if (!isKeyValid) return <ConfigError />;
   if (!user) return <Auth onLogin={handleLogin} />;
 
   return (
