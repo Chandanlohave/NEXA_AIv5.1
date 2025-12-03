@@ -84,17 +84,23 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
 
-        // Updated Prompt: Explicit Script Injection for correct pronunciation
+        // --- HARDCORE PRONUNCIATION FIX ---
+        // We act as a filter before the AI hears the request.
+        // We force replace the English script "Lohave" with Devanagari "लोहवे".
+        // When the TTS model sees Devanagari characters, it is FORCED to use Indian phonetics.
+        let forcedText = text;
+        
+        // 1. Replace English "Lohave" with Hindi "लोहवे"
+        forcedText = forcedText.replace(/Lohave/gi, "लोहवे");
+        
+        // 2. Fix incorrect Hindi spelling "लोहावे" to correct "लोहवे"
+        forcedText = forcedText.replace(/लोहावे/g, "लोहवे");
+
+        // Simple, direct prompt. We rely on the Devanagari script to do the heavy lifting for pronunciation.
         const ttsPrompt = `
-        You are a voice engine. 
-        Task: Read the following text aloud using the detected language's native accent (Hindi, Marathi, Tamil, Telugu, Punjabi, Malayalam, English, etc.).
-        
-        **PRONUNCIATION INSTRUCTIONS:**
-        1. Scan the text below for the word "Lohave" (case insensitive).
-        2. If found, REPLACE "Lohave" with the Hindi script word "लोहवे" for pronunciation.
-        3. Read the rest of the text naturally.
-        
-        Text to speak: "${text}"`;
+        Speak the following text naturally.
+        Text: "${forcedText}"
+        `;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
@@ -114,8 +120,6 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
             throw new Error("No audio data received from Gemini.");
         }
         
-        // Audio is ready to play.
-        // We call onStart immediately before the audio source starts.
         onStart();
 
         const audioBytes = decodeBase64(base64Audio);
@@ -141,7 +145,6 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         if (error.message !== 'GUEST_ACCESS_DENIED') {
            console.error("TTS failed", error);
         }
-        // Even if error, we must end the process so UI doesn't hang
         onEnd();
     }
 };
