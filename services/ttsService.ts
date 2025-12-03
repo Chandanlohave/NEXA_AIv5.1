@@ -84,14 +84,15 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
 
-        // Updated Prompt: Simplified and Direct
+        // Updated Prompt: Explicit Script Injection for correct pronunciation
         const ttsPrompt = `
         You are a voice engine. 
         Task: Read the following text aloud using the detected language's native accent (Hindi, Marathi, Tamil, Telugu, Punjabi, Malayalam, English, etc.).
         
-        **PRONUNCIATION RULE:**
-        - The name "Lohave" must be pronounced exactly as the Hindi word **"लोहवे"**.
-        - Do not Anglicize it. Just say **"लोहवे"**.
+        **PRONUNCIATION INSTRUCTIONS:**
+        1. Scan the text below for the word "Lohave" (case insensitive).
+        2. If found, REPLACE "Lohave" with the Hindi script word "लोहवे" for pronunciation.
+        3. Read the rest of the text naturally.
         
         Text to speak: "${text}"`;
 
@@ -113,6 +114,8 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
             throw new Error("No audio data received from Gemini.");
         }
         
+        // Audio is ready to play.
+        // We call onStart immediately before the audio source starts.
         onStart();
 
         const audioBytes = decodeBase64(base64Audio);
@@ -138,6 +141,7 @@ export const speak = async (text: string, onStart: () => void, onEnd: () => void
         if (error.message !== 'GUEST_ACCESS_DENIED') {
            console.error("TTS failed", error);
         }
+        // Even if error, we must end the process so UI doesn't hang
         onEnd();
     }
 };

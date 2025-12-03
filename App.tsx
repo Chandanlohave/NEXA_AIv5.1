@@ -180,8 +180,9 @@ const App: React.FC = () => {
     }
   }, [user]);
 
-  // Modified speakText to handle state transitions via callbacks
-  const speakText = useCallback((text: string, warningState: boolean = false) => {
+  // Modified speakText to accept an onAudioStart callback
+  // This callback is triggered when the audio actually begins playing
+  const speakText = useCallback((text: string, warningState: boolean = false, onAudioStart?: () => void) => {
     if (!text) {
         setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
         isProcessingRef.current = false;
@@ -192,15 +193,15 @@ const App: React.FC = () => {
         text,
         () => {
             // onStart: Audio is starting to play
+            // Execute the callback to show text (if provided)
+            if (onAudioStart) onAudioStart();
             setHudState(warningState ? HUDState.WARNING : HUDState.SPEAKING);
         },
         () => {
             // onEnd: Audio has finished playing
             if (!isProcessingRef.current) {
-               // Should not happen as processing is true, but safe guard
                setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
             } else {
-               // Processing was held true to prevent IDLE state, now we release
                isProcessingRef.current = false;
                setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
             }
@@ -225,10 +226,11 @@ const App: React.FC = () => {
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         
         appendMessageToMemory(user, introMsg);
-        setMessages([introMsg]);
+        // Important: We don't setMessages here immediately. We wait for speakText to start.
         
-        // Pass to speakText, which will handle the unlock of isProcessingRef
-        speakText(introText);
+        speakText(introText, false, () => {
+            setMessages([introMsg]);
+        });
       };
       init();
     }
@@ -307,12 +309,12 @@ const App: React.FC = () => {
         
         const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace(/\[SING\]/g, "\n\n"), timestamp: Date.now(), isAngry };
         appendMessageToMemory(user, modelMsg);
-        setMessages(prev => [...prev, modelMsg]);
+        // Note: Removed setMessages from here. It is now called inside speakText callback.
         
-        // CRITICAL FIX: Do NOT set state to IDLE here. Do NOT set isProcessingRef to false here.
-        // We pass the responsibility to speakText. 
-        // It will keep the state as THINKING until audio starts, then SPEAKING, then IDLE only when audio ends.
-        speakText(cleanText, isAngry);
+        // Pass the callback to update UI only when audio starts
+        speakText(cleanText, isAngry, () => {
+            setMessages(prev => [...prev, modelMsg]);
+        });
         
     } catch (error: any) {
         console.error("Processing Error", error);
