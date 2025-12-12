@@ -70,13 +70,19 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user';
           const isLastMessage = idx === messages.length - 1;
+          const isModelLastMessage = isLastMessage && !isUser;
+
+          // Hide the last model message while thinking to sync with audio
+          if (isModelLastMessage && hudState === HUDState.THINKING) {
+            return null;
+          }
 
           let label = 'NEXA';
           if (isUser) {
             label = userRole === UserRole.ADMIN ? 'ADMIN' : (userName || 'USER').toUpperCase();
           }
           
-          const shouldAnimate = isLastMessage && !isUser && (hudState === HUDState.SPEAKING || hudState === HUDState.WARNING);
+          const shouldAnimate = isModelLastMessage && (hudState === HUDState.SPEAKING || hudState === HUDState.WARNING);
           const cleanTextForDisplay = msg.text.trim();
 
           return (

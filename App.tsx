@@ -4,18 +4,18 @@ import HUD from './components/HUD';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
-// ConfigError is no longer used as a blocking screen
 import StudyHubPanel from './components/StudyHubPanel';
 import ManageAccountsModal from './components/ManageAccountsModal';
-import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
-import { generateTextResponse, generateIntroductoryMessage, generateAdminBriefing } from './services/geminiService';
+import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig, StudyHubSubject } from './types';
+import { generateTextResponse, generateIntroductoryMessage, generateAdminBriefing, generateTutorLesson } from './services/geminiService';
 import { playMicOnSound, playMicOffSound, playErrorSound } from './services/audioService';
-import { appendMessageToMemory, clearAllMemory, getAdminNotifications, clearAdminNotifications } from './services/memoryService';
-import { speak as speakTextTTS, stop as stopTextTTS } from './services/ttsService';
+import { appendMessageToMemory, clearAllMemory, getAdminNotifications, clearAdminNotifications, getLocalMessages, logAdminNotification } from './services/memoryService';
+import { speak as speakTextTTS, stop as stopTextTTS, speakIntro as speakIntroTTS } from './services/ttsService';
 
 // --- ICONS ---
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
+const StudyIcon = () => ( <svg className="w-5 h-5 text-nexa-blue/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg> );
 
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
     <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -26,7 +26,7 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, onLogout, onSettings, latency }: any) => (
+const StatusBar = ({ userName, onLogout, onSettings, latency, onStudyHub }: any) => (
     <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
         <div className="flex items-center gap-4">
             <div className="flex flex-col items-start">
@@ -37,6 +37,10 @@ const StatusBar = ({ userName, onLogout, onSettings, latency }: any) => (
         </div>
         <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-zinc-900 dark:text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div>
         <div className="flex items-center gap-4">
+            <button onClick={onStudyHub} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative">
+                <StudyIcon />
+                <span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">STUDY BUDDY</span>
+            </button>
             <button onClick={onSettings} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button>
             <button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button>
         </div>
@@ -75,7 +79,6 @@ const ConfirmationModal: React.FC<{isOpen: boolean, title: string, message: stri
   const confirmButtonText = variant === 'red' ? 'text-white' : 'text-black';
   const confirmButtonShadow = variant === 'red' ? 'shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'shadow-[0_0_15px_rgba(41,223,255,0.5)]';
 
-
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm animate-fade-in">
       <div className={`w-full max-w-sm bg-black border-2 ${borderColor} p-6 ${shadowColor}`}>
@@ -101,15 +104,23 @@ const App: React.FC = () => {
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [latency, setLatency] = useState<number | null>(null);
   
-  // We no longer strictly validate the key on startup. We let the Auth component handle "missing key" scenarios.
-  // This prevents the app from being bricked if no env key is present.
-  
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
   
   useEffect(() => {
     const savedUser = localStorage.getItem('nexa_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        const loadedMessages = getLocalMessages(parsedUser);
+        setMessages(loadedMessages);
+
+        // If no messages AND not processing, trigger intro
+        if (loadedMessages.length === 0 && !isProcessingRef.current) {
+            triggerIntro(parsedUser);
+        }
+    }
+    
     const savedConfig = localStorage.getItem('nexa_config');
     if (savedConfig) {
       const parsedConfig = JSON.parse(savedConfig);
@@ -126,9 +137,7 @@ const App: React.FC = () => {
     const applyTheme = (theme: AppConfig['theme']) => {
       const root = document.documentElement;
       const isDark = (theme === 'dark') || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
       root.classList.toggle('dark', isDark);
-
       if (isDark) {
         root.style.setProperty('--grid-color', 'rgba(41, 223, 255, 0.1)');
         root.style.setProperty('--vignette-mid', 'rgba(0,0,0,0.4)');
@@ -141,12 +150,9 @@ const App: React.FC = () => {
         root.style.setProperty('--scanline-color', 'rgba(255, 255, 255, 0.3)');
       }
     };
-
     applyTheme(config.theme);
-
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => { if (config.theme === 'system') { applyTheme('system'); } };
-
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [config.theme]);
@@ -159,20 +165,16 @@ const App: React.FC = () => {
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'en-IN';
       recognitionRef.current.onstart = () => { playMicOnSound(); setHudState(HUDState.LISTENING); };
-      
       recognitionRef.current.onend = () => {
         playMicOffSound();
         if (!isProcessingRef.current) {
           setHudState(currentState => (currentState === HUDState.LISTENING ? HUDState.IDLE : currentState));
         }
       };
-
       recognitionRef.current.onerror = (event: any) => { 
-        console.error("Speech Error", event); 
         if (!isProcessingRef.current) setHudState(HUDState.IDLE); 
         playErrorSound(); 
       };
-
       recognitionRef.current.onresult = async (event: any) => {
         let transcript = event.results[0][0].transcript.trim().replace(/naksha|naks|next a|neck sa|naxa/gi, 'Nexa').replace(/नक्शा/g, 'Nexa');
         if (transcript) await processInput(transcript);
@@ -181,75 +183,90 @@ const App: React.FC = () => {
   }, [user]);
 
   const speakText = useCallback((text: string, warningState: boolean = false, onAudioStart?: () => void) => {
-    if (!text) {
+    if (!text || !user) {
         setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
         isProcessingRef.current = false;
         return;
     }
 
     speakTextTTS(
+        user,
         text,
         () => {
             if (onAudioStart) onAudioStart();
             setHudState(warningState ? HUDState.WARNING : HUDState.SPEAKING);
         },
         () => {
-            if (!isProcessingRef.current) {
-               setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
-            } else {
-               isProcessingRef.current = false;
-               setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
-            }
+            isProcessingRef.current = false;
+            setHudState(warningState ? HUDState.WARNING : (isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE));
         }
     );
-  }, [isStudyHubOpen]);
+  }, [isStudyHubOpen, user]);
 
-  useEffect(() => {
-    if (user && messages.length === 0 && hudState === HUDState.IDLE && !isProcessingRef.current) {
-      const init = async () => {
+  const triggerIntro = async (currentUser: UserProfile) => {
+        if (isProcessingRef.current) return;
         isProcessingRef.current = true;
         setHudState(HUDState.THINKING);
+        
         let briefing = null;
-        if (user.role === UserRole.ADMIN) {
-            const notifications = getAdminNotifications();
+        if (currentUser.role === UserRole.ADMIN) {
+            const notifications = await getAdminNotifications();
             if (notifications.length > 0) {
                 briefing = await generateAdminBriefing(notifications);
                 clearAdminNotifications();
             }
         }
         
-        // Handle "Missing Key" gracefully during Intro
         try {
-            const introText = await generateIntroductoryMessage(user, briefing);
+            const introText = await generateIntroductoryMessage(currentUser, briefing);
             const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
-            appendMessageToMemory(user, introMsg);
-            speakText(introText, false, () => {
-                setMessages([introMsg]);
-            });
+            
+            await appendMessageToMemory(currentUser, introMsg);
+            setMessages(prev => [...prev, introMsg]);
+
+            const now = new Date();
+            const hour = now.getHours();
+            let time_based_greeting;
+            if (hour >= 4 && hour < 12) time_based_greeting = 'morning';
+            else if (hour >= 12 && hour < 17) time_based_greeting = 'afternoon';
+            else time_based_greeting = 'evening';
+            
+            // Unique cache key for intro based on content length to avoid stale caches if briefing changes
+            const cacheKey = `nexa_intro_${currentUser.role}_${introText.length}`;
+            
+            speakIntroTTS(currentUser, introText, cacheKey,
+              () => setHudState(HUDState.SPEAKING),
+              () => {
+                isProcessingRef.current = false;
+                setHudState(HUDState.IDLE);
+              }
+            );
+
         } catch (error: any) {
-             console.error("Intro Error", error);
-             let errorText = "Initial connection failed. Please check your network.";
-             if (error.message?.includes('API_KEY_MISSING') || error.message?.includes('API_KEY_INVALID') || error.message === 'GUEST_ACCESS_DENIED') {
-                 errorText = "NEXA SYSTEM ALERT: API Key is missing. Please enter your Custom API Key in Settings to activate the system.";
-             }
-             const errMsg: ChatMessage = { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true };
-             setMessages([errMsg]);
              isProcessingRef.current = false;
              setHudState(HUDState.IDLE);
         }
-      };
-      init();
-    }
-  }, [user, messages.length, hudState, speakText]);
+  };
 
   const handleLogin = (profile: UserProfile) => {
     setUser(profile);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
-    setMessages([]);
-    setHudState(HUDState.IDLE);
+    
+    // Load local messages
+    const loadedMessages = getLocalMessages(profile);
+    setMessages(loadedMessages);
+
+    // If new session or admin login, trigger intro/briefing logic
+    if (profile.role === UserRole.ADMIN || loadedMessages.length === 0) {
+        // Slight delay to allow UI to mount
+        setTimeout(() => triggerIntro(profile), 500);
+    } else {
+        setHudState(HUDState.IDLE);
+    }
   };
 
   const handleLogout = () => {
+    stopTextTTS();
     setUser(null);
     setMessages([]);
     localStorage.removeItem('nexa_user');
@@ -261,31 +278,34 @@ const App: React.FC = () => {
       recognitionRef.current?.stop();
     } else if (hudState === HUDState.IDLE || hudState === HUDState.SPEAKING || hudState === HUDState.STUDY_HUB) {
       stopTextTTS();
-      try { recognitionRef.current?.start(); } catch (e) { console.error("Mic Start Error", e); setHudState(HUDState.IDLE); }
+      try { recognitionRef.current?.start(); } catch (e) { setHudState(HUDState.IDLE); }
     }
   };
 
   const handleSettingsClick = () => {
-    if (isStudyHubOpen) {
+    if (isStudyHubOpen) { setIsStudyHubOpen(false); setHudState(HUDState.IDLE); }
+    if (user?.role === UserRole.ADMIN) { setIsAdminPanelOpen(true); } else { setIsUserSettingsOpen(true); }
+  };
+
+  const handleManageAccounts = () => { setIsAdminPanelOpen(false); setIsManageAccountsModalOpen(true); };
+  const handleViewStudyHub = () => { setIsAdminPanelOpen(false); setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB); };
+
+  const handleStartLesson = async (subject: StudyHubSubject) => {
       setIsStudyHubOpen(false);
-      setHudState(HUDState.IDLE);
-    }
-    if (user?.role === UserRole.ADMIN) {
-      setIsAdminPanelOpen(true);
-    } else {
-      setIsUserSettingsOpen(true);
-    }
-  };
-
-  const handleManageAccounts = () => {
-    setIsAdminPanelOpen(false);
-    setIsManageAccountsModalOpen(true);
-  };
-
-  const handleViewStudyHub = () => {
-    setIsAdminPanelOpen(false);
-    setIsStudyHubOpen(true);
-    setHudState(HUDState.STUDY_HUB);
+      if(!user) return;
+      const userMsg: ChatMessage = { role: 'user', text: `Start Class: ${subject.courseCode}`, timestamp: Date.now() };
+      setMessages(prev => [...prev, userMsg]);
+      await appendMessageToMemory(user, userMsg);
+      setHudState(HUDState.THINKING);
+      const startTime = Date.now();
+      try {
+          const lessonText = await generateTutorLesson(subject, user);
+          setLatency(Date.now() - startTime);
+          const modelMsg: ChatMessage = { role: 'model', text: lessonText, timestamp: Date.now() };
+          setMessages(prev => [...prev, modelMsg]);
+          await appendMessageToMemory(user, modelMsg);
+          speakText(lessonText, false);
+      } catch (e) { setHudState(HUDState.IDLE); }
   };
 
   const processInput = async (text: string) => {
@@ -293,46 +313,34 @@ const App: React.FC = () => {
     isProcessingRef.current = true;
 
     const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
-    appendMessageToMemory(user, userMsg);
     setMessages(prev => [...prev, userMsg]);
-    
+    await appendMessageToMemory(user, userMsg);
     setHudState(HUDState.THINKING);
-
     const startTime = Date.now();
     try {
         const responseText = await generateTextResponse(text, user);
         setLatency(Date.now() - startTime);
 
-        if (responseText.includes("[LOG_INCIDENT:Insult]") || responseText.includes("[LOG_INCIDENT:Query]")) {
-            const notifications = getAdminNotifications();
-            const incidentType = responseText.includes("Insult") ? "insulted you" : "queried about you";
-            notifications.push(`At ${new Date().toLocaleTimeString()}, user '${user.name}' (${user.mobile}) ${incidentType}. Query: "${text}"`);
-            localStorage.setItem('nexa_admin_notifications', JSON.stringify(notifications));
-        }
+        // --- SECURITY LEVEL 8 CHECK ---
+        const isWarning = responseText.includes("[[STATE:WARNING]]");
+        const cleanText = responseText.replace(/\[\[STATE:WARNING\]\]/g, "").trim();
 
-        const isAngry = responseText.includes("[[STATE:ANGRY]]");
-        const cleanText = responseText.replace(/\[\[STATE:ANGRY\]\]|\[LOG_INCIDENT:.*?\]/g, "").trim();
+        if (isWarning) {
+            playErrorSound(); // Alert sound
+            logAdminNotification(`SECURITY ALERT: User '${user.name}' (${user.mobile}) attempted to insult Creator. Input: "${text}"`);
+        }
         
-        const modelMsg: ChatMessage = { role: 'model', text: cleanText.replace(/\[SING\]/g, "\n\n"), timestamp: Date.now(), isAngry };
-        appendMessageToMemory(user, modelMsg);
+        const modelMsg: ChatMessage = { role: 'model', text: cleanText, timestamp: Date.now(), isAngry: isWarning };
+        setMessages(prev => [...prev, modelMsg]);
+        await appendMessageToMemory(user, modelMsg);
         
-        speakText(cleanText, isAngry, () => {
-            setMessages(prev => [...prev, modelMsg]);
-        });
+        speakText(cleanText, isWarning);
         
     } catch (error: any) {
-        console.error("Processing Error", error);
         setHudState(HUDState.IDLE); 
         playErrorSound();
-        let errorText = "I encountered an internal error. Please try again.";
-        
-        if (error.message?.includes('API_KEY_MISSING') || error.message?.includes('API_KEY_INVALID')) {
-            errorText = "SYSTEM ALERT: Gemini API Access Key is missing or invalid. Please check your configuration.";
-        } else if (error.message === 'GUEST_ACCESS_DENIED') {
-            errorText = "ACCESS RESTRICTED: You are in Guest Mode. Please enter your own Gemini API Key in Settings to continue. My creator's quota is protected.";
-        }
-
-        setMessages(prev => [...prev, { role: 'model', text: errorText, timestamp: Date.now(), isAngry: true }]);
+        let errorText = "Internal error.";
+        if (error.message === 'GUEST_ACCESS_DENIED') errorText = "ACCESS DENIED: Please enter API Key.";
         isProcessingRef.current = false;
     }
   };
@@ -342,7 +350,13 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden font-sans select-none transition-colors duration-500">
       <div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div>
-      <StatusBar userName={user.name} onLogout={handleLogout} onSettings={handleSettingsClick} latency={latency} />
+      <StatusBar 
+        userName={user.name} 
+        onLogout={handleLogout} 
+        onSettings={handleSettingsClick} 
+        onStudyHub={() => { setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB); }} 
+        latency={latency} 
+      />
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
         <div className="flex-[0.45] flex items-center justify-center min-h-[250px] relative"><HUD state={hudState} rotationSpeed={config.animationsEnabled ? config.hudRotationSpeed : 0} /></div>
         <div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div>
@@ -355,33 +369,17 @@ const App: React.FC = () => {
           onClose={() => setIsAdminPanelOpen(false)} 
           config={config} 
           onConfigChange={handleConfigChange} 
-          onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'This will irreversibly delete ALL user and admin conversation history. This cannot be undone.', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(); window.location.reload(); } })} 
+          onClearMemory={() => setConfirmModal({ isOpen: true, title: 'PURGE ALL MEMORY?', message: 'Irreversibly delete ALL history?', confirmationWord: 'DELETE', onConfirm: () => { clearAllMemory(user); window.location.reload(); } })} 
           onManageAccounts={handleManageAccounts} 
           onViewStudyHub={handleViewStudyHub}
         />
       ) : (
-        <UserSettingsPanel 
-          isOpen={isUserSettingsOpen} 
-          onClose={() => setIsUserSettingsOpen(false)} 
-          config={config} 
-          onConfigChange={handleConfigChange} 
-        />
+        <UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={handleConfigChange} />
       )}
 
-      <StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(HUDState.IDLE); }} />
+      <StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(HUDState.IDLE); }} user={user} onStartLesson={handleStartLesson} />
       <ManageAccountsModal isOpen={isManageAccountsModalOpen} onClose={() => setIsManageAccountsModalOpen(false)} />
-
-      <ConfirmationModal 
-        isOpen={confirmModal.isOpen} 
-        title={confirmModal.title} 
-        message={confirmModal.message} 
-        onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({...confirmModal, isOpen: false}); }} 
-        onClose={() => setConfirmModal({...confirmModal, isOpen: false})} 
-        confirmationWord={confirmModal.confirmationWord} 
-        confirmLabel={confirmModal.confirmLabel}
-        cancelLabel={confirmModal.cancelLabel}
-        variant={confirmModal.variant}
-      />
+      <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({...confirmModal, isOpen: false}); }} onClose={() => setConfirmModal({...confirmModal, isOpen: false})} confirmationWord={confirmModal.confirmationWord} confirmLabel={confirmModal.confirmLabel} cancelLabel={confirmModal.cancelLabel} variant={confirmModal.variant} />
     </div>
   );
 };

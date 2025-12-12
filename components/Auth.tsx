@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
 import InstallPWAButton from './InstallPWAButton';
+import { syncUserProfile } from '../services/memoryService';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
@@ -34,12 +35,12 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
   );
 };
 
-const CyberButton = ({ onClick, label, secondary = false, loading = false }: any) => (
+const CyberButton = ({ onClick, label, secondary = false, loading = false, icon = null }: any) => (
   <button
     onClick={onClick}
     disabled={loading}
     className={`
-      w-full py-4 px-6 font-bold tracking-[0.2em] uppercase transition-all duration-200 z-50 cursor-pointer clip-corner relative z-20
+      w-full py-4 px-6 font-bold tracking-[0.2em] uppercase transition-all duration-200 z-50 cursor-pointer clip-corner relative z-20 flex items-center justify-center gap-3
       ${secondary 
         ? 'bg-transparent border border-nexa-cyan/30 text-nexa-cyan/60 hover:text-black dark:hover:text-white hover:border-nexa-cyan' 
         : 'bg-nexa-cyan text-black hover:bg-zinc-800 dark:hover:bg-white hover:shadow-[0_0_20px_rgba(41,223,255,0.6)]'
@@ -52,21 +53,27 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false }: any
          <span className="w-2 h-2 bg-black dark:bg-white rounded-full animate-bounce"></span>
          PROCESSING
       </span>
-    ) : label}
+    ) : (
+      <>
+        {icon && <span className="w-5 h-5">{icon}</span>}
+        {label}
+      </>
+    )}
   </button>
 );
+
 
 // --- MAIN AUTH COMPONENT ---
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
-  const [mode, setMode] = useState<'INIT' | 'USER' | 'ADMIN' | 'KEY_INPUT'>('INIT');
+  const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'KEY_INPUT'>('INIT');
   
   const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    fullName: '',
-    mobile: '',
-    gender: null as 'male' | 'female' | 'other' | null,
+    name: '',
+    mobile: '', // Used as unique ID
+    gender: 'male',
+    username: '', // Admin login
+    password: '', // Admin login
     customApiKey: localStorage.getItem('nexa_client_api_key') || ''
   });
 
@@ -75,14 +82,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
   const [initStatusText, setInitStatusText] = useState('TAP TO CONNECT');
 
-  // New check: Is a system key present?
+  // Check connectivity options
   const hasSystemKey = !!process.env.API_KEY;
   const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
   const isFullyOffline = !hasSystemKey && !hasCustomKey;
 
   useEffect(() => {
-    const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_KEY', 'NEXA_PROTOCOL'];
-    const statusTexts = ['CALIBRATING_NEURAL_NET...', 'SYNCING_CHRONO_DRIVES...', 'AWAITING_CONNECTION...'];
+    const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_USER', 'NEXA_PROTOCOL'];
+    const statusTexts = ['CALIBRATING_NEURAL_NET...', 'SYNCING_LOCAL_DRIVES...', 'AWAITING_INPUT...'];
     let headerInterval: any, statusInterval: any;
 
     if (mode === 'INIT') {
@@ -95,53 +102,58 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     return () => { clearInterval(headerInterval); clearInterval(statusInterval); };
   }, [mode]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError('');
   };
 
-  const handleGenderSelect = (gender: 'male' | 'female' | 'other') => {
-    setFormData({ ...formData, gender });
-    setError('');
-  };
-
   const initiateSystem = () => {
-    // If no keys are present at all, force the user to input a key
     if (isFullyOffline) {
-        playErrorSound();
-        setMode('KEY_INPUT');
-        setError('// SYSTEM ALERT: NO API KEY DETECTED. PLEASE ENTER KEY.');
-        return;
+        // Even if no key, we let them enter user details, then force key entry later or show error in chat
     }
 
     playStartupSound();
     setLoading(true);
     setInitStatusText('CONNECTION_ESTABLISHED');
-    setTimeout(() => { setLoading(false); setMode('USER'); }, 1500);
+    setTimeout(() => { setLoading(false); setMode('USER_CREATE'); }, 1500);
   };
 
   const handleAdminLogin = () => {
     if (formData.username === 'Chandan' && formData.password === 'Nexa') {
-      completeLogin({ name: 'Chandan', mobile: '0000000000', role: UserRole.ADMIN, gender: 'male' });
+      const adminProfile: UserProfile = { name: 'Chandan', mobile: 'admin_001', role: UserRole.ADMIN, gender: 'male' };
+      completeLogin(adminProfile);
     } else {
       playErrorSound();
       setError('// ERROR: INVALID CREDENTIALS');
     }
   };
 
-  const handleUserLogin = () => {
-    const nameRegex = /^[a-zA-Z\s]{3,}$/;
-    const mobileRegex = /^[0-9]{10}$/;
-    if (!nameRegex.test(formData.fullName)) {
-      playErrorSound(); setError('// ERROR: INVALID NAME (MIN 3 CHARS, ALPHA ONLY)'); return;
+  const handleUserCreate = async () => {
+    if (!formData.name.trim()) {
+        playErrorSound();
+        setError('// ERROR: NAME REQUIRED');
+        return;
     }
-    if (!mobileRegex.test(formData.mobile)) {
-      playErrorSound(); setError('// ERROR: PLEASE ENTER A VALID 10-DIGIT MOBILE NUMBER'); return;
+    
+    if (!/^\d{10}$/.test(formData.mobile.trim())) {
+        playErrorSound();
+        setError('// ERROR: VALID 10-DIGIT MOBILE REQUIRED');
+        return;
     }
-    if (!formData.gender) {
-      playErrorSound(); setError('// ERROR: PLEASE SELECT YOUR GENDER'); return;
-    }
-    completeLogin({ name: formData.fullName, mobile: formData.mobile, role: UserRole.USER, gender: formData.gender });
+
+    setLoading(true);
+    
+    const userId = formData.mobile.trim();
+    
+    const profile: UserProfile = {
+         name: formData.name,
+         mobile: userId, 
+         role: UserRole.USER,
+         gender: formData.gender as 'male' | 'female' | 'other'
+    };
+
+    await syncUserProfile(profile);
+    completeLogin(profile);
   };
 
   const saveCustomKey = () => {
@@ -151,7 +163,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         return;
     }
     localStorage.setItem('nexa_client_api_key', formData.customApiKey.trim());
-    // Trigger a reload to update App state or simply return to INIT
     window.location.reload(); 
   };
   
@@ -174,6 +185,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   return (
     <div className="fixed inset-0 bg-zinc-100 dark:bg-black flex flex-col items-center justify-center p-6 z-[60] overflow-hidden transition-colors duration-500">
+      {/* Visual Background Effects */}
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       <div className="absolute top-8 text-center animate-fade-in z-50"><div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em]">CREATED BY</div><div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.2em]">CHANDAN LOHAVE</div></div>
@@ -211,22 +223,32 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <div className="text-zinc-500 dark:text-nexa-cyan/60 text-xs font-mono tracking-[0.3em] group-hover:text-nexa-cyan transition-colors">{loading ? 'INITIALIZING...' : initStatusText}</div>
               </div>
               {hasCustomKey && <div className="mt-4 px-2 py-1 bg-nexa-cyan/10 border border-nexa-cyan/30 text-[9px] text-nexa-cyan tracking-widest font-mono">USING CUSTOM KEY</div>}
-              {isFullyOffline && !hasCustomKey && <div className="mt-4 px-2 py-1 bg-red-500/10 border border-red-500/30 text-[9px] text-red-500 tracking-widest font-mono animate-pulse">OFFLINE MODE</div>}
             </div>
           )}
 
-          {mode === 'USER' && (
+          {mode === 'USER_CREATE' && (
             <div className="animate-slide-up space-y-3">
-              <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-2">IDENTITY REQUIRED</div></div>
-              <BracketInput name="fullName" placeholder="ENTER YOUR NAME" value={formData.fullName} onChange={handleChange} autoFocus />
-              <BracketInput name="mobile" placeholder="MOBILE NUMBER" type="tel" value={formData.mobile} onChange={handleChange} />
-              <div className="flex justify-center gap-2 pt-2">
-                {(['male', 'female', 'other'] as const).map(gender => (
-                  <button key={gender} onClick={() => handleGenderSelect(gender)} className={`flex-1 py-2 text-xs font-mono uppercase tracking-widest border transition-all ${formData.gender === gender ? 'bg-nexa-cyan text-black border-nexa-cyan' : 'bg-transparent text-zinc-500 border-zinc-400 dark:border-zinc-700 hover:border-nexa-cyan hover:text-nexa-cyan'}`}>{gender}</button>
-                ))}
+              <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-6">IDENTIFY YOURSELF</div></div>
+              
+              <BracketInput name="name" placeholder="ENTER NAME" value={formData.name} onChange={handleChange} autoFocus />
+              <BracketInput name="mobile" placeholder="ENTER 10-DIGIT MOBILE" type="tel" value={formData.mobile} onChange={handleChange} />
+
+              <div className="flex items-center justify-center gap-4 py-2">
+                 <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan" />
+                    <span className="text-xs font-mono text-zinc-400">MALE</span>
+                 </label>
+                 <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="accent-nexa-cyan" />
+                    <span className="text-xs font-mono text-zinc-400">FEMALE</span>
+                 </label>
               </div>
+
+              <div className="pt-4">
+                  <CyberButton onClick={handleUserCreate} label="INITIALIZE PROFILE" loading={loading} />
+              </div>
+
               <div className="pt-4 space-y-4">
-                  <CyberButton onClick={handleUserLogin} label="LOGIN" loading={loading} />
                   <div className="flex justify-between items-center text-center mt-2 px-1">
                       <button onClick={() => setMode('INIT')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-1 group"><span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> BACK</button>
                       <button onClick={switchToAdmin} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">// Admin Console</button>
@@ -250,9 +272,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </div>
           )}
 
-          {mode === 'ADMIN' && (<div className="animate-slide-up relative z-10"><div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,rgba(220,38,38,0.05)_0px,rgba(220,38,38,0.05)_10px,transparent_10px,transparent_20px)] pointer-events-none -z-10"></div><div className="text-center mb-6"><div className="inline-flex items-center gap-2 border border-red-500/50 px-3 py-1 bg-red-500/10 backdrop-blur-sm"><div className="w-2 h-2 bg-red-500 animate-pulse rounded-full"></div><span className="text-red-500 text-[10px] font-mono tracking-[0.2em] uppercase">Security Level 8</span></div></div><div className="absolute top-10 right-4 opacity-5 pointer-events-none"><svg className="w-24 h-24 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17a2 2 0 100-4 2 2 0 000 4zm6-9a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V10a2 2 0 012-2h1V6a5 5 0 0110 0v2h1zM8 6a4 4 0 018 0v2H8V6z"/></svg></div><div className="space-y-4 relative z-20"><BracketInput name="username" placeholder="IDENTITY_ID" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" className="password-hidden" /><BracketInput name="password" placeholder="ACCESS_KEY" type="text" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" /></div><div className="pt-8 space-y-4 relative z-20"><button onClick={handleAdminLogin} disabled={loading} className="w-full py-4 bg-red-600 text-white font-bold tracking-[0.2em] hover:bg-red-500 hover:shadow-[0_0_25px_rgba(220,38,38,0.8)] transition-all clip-corner relative overflow-hidden group" style={{ clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)' }}><div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><span className="relative z-10 flex items-center justify-center gap-2">{loading ? 'AUTHENTICATING...' : <>AUTHORIZE OVERRIDE <span className="text-xs opacity-70">{'>>'}</span></>}</span></button><div className="mt-2"><button onClick={() => setMode('USER')} className="text-[9px] text-red-500/60 hover:text-red-500 font-mono tracking-widest uppercase transition-colors flex items-center justify-center gap-2 w-full group"><span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> ABORT SEQUENCE</button></div></div></div>)}
+          {mode === 'ADMIN' && (<div className="animate-slide-up relative z-10"><div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,rgba(220,38,38,0.05)_0px,rgba(220,38,38,0.05)_10px,transparent_10px,transparent_20px)] pointer-events-none -z-10"></div><div className="text-center mb-6"><div className="inline-flex items-center gap-2 border border-red-500/50 px-3 py-1 bg-red-500/10 backdrop-blur-sm"><div className="w-2 h-2 bg-red-500 animate-pulse rounded-full"></div><span className="text-red-500 text-[10px] font-mono tracking-[0.2em] uppercase">Security Level 8</span></div></div><div className="absolute top-10 right-4 opacity-5 pointer-events-none"><svg className="w-24 h-24 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17a2 2 0 100-4 2 2 0 000 4zm6-9a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V10a2 2 0 012-2h1V6a5 5 0 0110 0v2h1zM8 6a4 4 0 018 0v2H8V6z"/></svg></div><div className="space-y-4 relative z-20"><BracketInput name="username" placeholder="IDENTITY_ID" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" className="password-hidden" /><BracketInput name="password" placeholder="ACCESS_KEY" type="text" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" /></div><div className="pt-8 space-y-4 relative z-20"><button onClick={handleAdminLogin} disabled={loading} className="w-full py-4 bg-red-600 text-white font-bold tracking-[0.2em] hover:bg-red-500 hover:shadow-[0_0_25px_rgba(220,38,38,0.8)] transition-all clip-corner relative overflow-hidden group" style={{ clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)' }}><div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><span className="relative z-10 flex items-center justify-center gap-2">{loading ? 'AUTHENTICATING...' : <>AUTHORIZE OVERRIDE <span className="text-xs opacity-70">{'>>'}</span></>}</span></button><div className="mt-2"><button onClick={() => setMode('USER_CREATE')} className="text-[9px] text-red-500/60 hover:text-red-500 font-mono tracking-widest uppercase transition-colors flex items-center justify-center gap-2 w-full group"><span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> ABORT SEQUENCE</button></div></div></div>)}
         </div>
-        <div className="flex justify-between mt-2 px-2"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>SECURE CONNECTION</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>V.9.0.1</div></div>
+        <div className="flex justify-between mt-2 px-2"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>SECURE CONNECTION</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>V.9.0.2</div></div>
       </div>
       <div className="absolute bottom-16 text-center text-[8px] font-mono text-zinc-400 dark:text-nexa-cyan/30 tracking-widest animate-fade-in z-50">© 2025 CHANDAN LOHAVE. ALL RIGHTS RESERVED.</div>
       <InstallPWAButton />

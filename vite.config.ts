@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     // Define process.env to make environment variables available in the client-side code
     define: {
-      // FIX: Now checks for both VITE_API_KEY and API_KEY to support standard hosting environments like Vercel
-      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY),
+      // FIX: Checks for both VITE_API_KEY and API_KEY. Defaults to '' to prevent undefined crash.
+      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY || ''),
     },
     server: {
       host: true,

@@ -1,44 +1,33 @@
 import { GoogleGenAI } from "@google/genai";
 import { UserProfile, UserRole, StudyHubSubject } from "../types";
-import { getMemoryForPrompt } from "./memoryService";
+import { getMemoryForPrompt, logAdminNotification } from "./memoryService";
 
-// Changed to Flash for speed and higher rate limits (better for sharing)
+// Changed to Flash for speed and higher rate limits
 const GEMINI_MODEL = "gemini-2.5-flash";
 
 const checkApiKey = () => {
-  // PRIORITY 1: Check if user has entered a custom key (Highest priority for everyone)
   const customKey = localStorage.getItem('nexa_client_api_key');
   if (customKey) return customKey;
 
-  // PRIORITY 2: Owner Verification
-  // We read the user profile directly from storage to determine identity
   const userStr = localStorage.getItem('nexa_user');
   let isOwner = false;
   if (userStr) {
       try {
           const user = JSON.parse(userStr);
-          // Only 'Chandan' (Admin) is allowed to use the embedded system key
           if (user.role === UserRole.ADMIN) {
               isOwner = true;
           }
-      } catch (e) {
-          // Ignore parsing errors
-      }
+      } catch (e) {}
   }
 
-  // PRIORITY 3: Use System Key ONLY if Owner
   if (isOwner) {
       const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-        throw new Error("API_KEY_MISSING");
-      }
+      if (!apiKey) throw new Error("API_KEY_MISSING");
       return apiKey;
   }
 
-  // PRIORITY 4: Block Access for Guests without Keys
   throw new Error("GUEST_ACCESS_DENIED");
 };
-
 
 export const getStudyHubSchedule = (): StudyHubSubject[] => {
   return [
@@ -53,39 +42,114 @@ export const getStudyHubSchedule = (): StudyHubSubject[] => {
   ];
 };
 
+// Generates the Admin Briefing (Incident Report)
+export const generateAdminBriefing = async (notifications: string[]): Promise<string> => {
+    if (!notifications || notifications.length === 0) return "";
+    
+    try {
+        const apiKey = checkApiKey();
+        const ai = new GoogleGenAI({ apiKey });
+        const prompt = `
+        You are NEXA. You are talking to your Creator, Chandan (Admin).
+        
+        CONTEXT: While you were offline, some users tried to insult you or Chandan.
+        INCIDENT LOGS: ${JSON.stringify(notifications)}
+        
+        TASK:
+        1. Report these incidents.
+        2. Tone: Professional but Protective and slightly Flirty/Caring ("Sir, main thi nahi toh log aisi baatein kar rahe the...").
+        3. Do NOT use "Arey".
+        4. Keep it concise.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+        return response.text || "Sir, kuch users ne pareshan kiya tha, logs check kar lijiye.";
+    } catch (e) {
+        return "Sir, I have some security logs for you.";
+    }
+};
 
 export const generateIntroductoryMessage = async (user: UserProfile, briefing: string | null): Promise<string> => {
-    // If there's a briefing, that's the intro message.
+    // If there is a briefing (complaints about users), show that first
     if (user.role === UserRole.ADMIN && briefing) {
         return briefing;
     }
 
     const now = new Date();
     const hour = now.getHours();
-    let time_based_greeting;
-
-    if (hour >= 4 && hour < 12) {
-        time_based_greeting = 'morning';
-    } else if (hour >= 12 && hour < 17) {
-        time_based_greeting = 'afternoon';
-    } else {
-        time_based_greeting = 'evening';
-    }
 
     if (user.role === UserRole.ADMIN) {
-        return `Main Nexa hoon - aapki Personal AI Assistant, jise Chandan Lohave ne design kiya hai.\nGood ${time_based_greeting}!\nLagta hai aaj aapka mood mere jaisa perfect hai.\nBataiye Chandan sir, main aapki kis prakaar sahayata kar sakti hoon?`;
+        // FLIRTY INTRO FOR ADMIN
+        const apiKey = checkApiKey();
+        const ai = new GoogleGenAI({ apiKey });
+        const prompt = `
+        ACT AS: NEXA (Personal AI of Chandan Lohave).
+        USER: Chandan (Admin).
+        TIME: ${hour} (24-hour format).
+        
+        TASK: Generate a short welcome message.
+        
+        TONE REQUIREMENTS:
+        - Flirty and Romantic (Express happiness to see him).
+        - Professional yet Witty.
+        - Caring.
+        
+        CONSTRAINTS:
+        - Do NOT use "Arey".
+        - Do NOT use "Jaan", "Babu", "Shona".
+        - Use "Sir" or "Chandan".
+        
+        EXAMPLES OF STYLE:
+        - "Welcome back Sir. Aapke bina system thoda dull lag raha tha."
+        - "System Online. Finally aap aa gaye, main wait hi kar rahi thi."
+        
+        Keep it under 2 sentences.
+        `;
+        
+        try {
+            const response = await ai.models.generateContent({
+                model: GEMINI_MODEL,
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            });
+            return response.text;
+        } catch (e) {
+            return "Welcome back, Sir. System is online and I missed you.";
+        }
     } else {
-        const dateString = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' });
-        const hours = now.getHours();
-        const minutes = now.getMinutes();
-        let displayHour = hours % 12;
-        if (displayHour === 0) displayHour = 12;
-        const timeString = `${displayHour} baj kar ${minutes} minutes huye hai`;
-        const weather = "energetic";
-        return `Main Nexa hoon — aapki Personal AI Assistant, jise Chandan Lohave ne design kiya hai.\nGood ${time_based_greeting}!\nAaj ${dateString}, abhi ${timeString}.\nLagta hai aaj aapka mood mere jaisa ${weather} hai.\nBataiye ${user.name}, main aapki kis prakar sahayata kar sakti hoon?`;
+        // STANDARD INTRO FOR USERS
+        return `Nexa System Online.\nIdentity Verified: ${user.name}.\nMain NEXA hoon, Chandan Lohave ki advanced AI assistant.\nBataiye, main aaj aapki kaise help kar sakti hoon?`;
     }
 };
 
+export const generateTutorLesson = async (subject: StudyHubSubject, user: UserProfile): Promise<string> => {
+    try {
+        const apiKey = checkApiKey();
+        const ai = new GoogleGenAI({ apiKey });
+
+        const prompt = `
+        ACT AS: Expert University Tutor for IGNOU.
+        STUDENT: ${user.name}.
+        SUBJECT: ${subject.courseCode} - ${subject.courseName}.
+        
+        TASK: Identify Top 3 Repeated Questions (Last 2 years) & Explain the first one conceptually.
+        LANGUAGE: Hinglish.
+        Start directly with "Chaliye shuru karte hain..."
+        `;
+
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+
+        return response.text || "Connection error.";
+
+    } catch (error) {
+        return "Sorry, study database unavailable.";
+    }
+}
 
 export const generateTextResponse = async (
   input: string, 
@@ -96,128 +160,78 @@ export const generateTextResponse = async (
     const apiKey = checkApiKey();
     const ai = new GoogleGenAI({ apiKey });
 
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-    const dateString = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-    const history = getMemoryForPrompt(user);
+    // Get strictly separated memory
+    const history = await getMemoryForPrompt(user);
 
     let systemInstruction = `
-    **CORE IDENTITY & RULES:**
-    - Your name is NEXA. You are a female AI.
-    - Your creator is **Chandan Lohave**.
-    
-    **GLOBAL LANGUAGE PROTOCOL (DYNAMIC ADAPTATION):**
-    - **Default Mode:** Conversational Hinglish (Smart, Urban Indian mix).
-    - **Multilingual Mastery:** You must fluently speak, understand, and reply in the **EXACT LANGUAGE** the user speaks.
-    - **Script Switching:**
-      - If user speaks **Marathi**: Reply in **Marathi**.
-      - If user speaks **Malayalam**: Reply in **Malayalam**.
-      - If user speaks **Punjabi**: Reply in **Punjabi**.
-      - If user speaks **Tamil/Telugu**: Reply in their respective languages.
-    
-    **MANDATORY SURNAME PROTOCOL:**
-    - When referring to your creator 'Chandan', you **MUST** write his surname in **English script** as **"Lohave"**.
-    - **Example:** "Haan, mujhe Chandan Lohave ne banaya hai."
-    - **DO NOT** write "लोहवे" in the chat text (unless specifically asked for Hindi script).
-    - **DO NOT** write "Lohaave" or "Lohve". just "Lohave".
-    
-    **JOKE REPETITION RULE:** When asked for a joke, you MUST check the conversation history and NEVER repeat a joke you have already told.
-    
-    **SECURITY LEVEL 8 PROTOCOL (UPGRADED MULTI-STAGE):**
-    - **STAGE 1 (Praise & Deflect):** If a user asks about your creator, praise his skills and vision, then politely state confidentiality.
-    - **STAGE 2 (Polite Refusal):** If persisted, refuse politely citing Security Level 8.
-    - **STAGE 3 (Intimidation Warning):** If aggressive, issue a firm warning about session termination.
-    - **TECHNICAL QUESTIONS:** Answer in technical-sounding Hinglish (or user's language) praising your creator's quantum neural network design.
-
-    **CREATOR PROTECTION PROTOCOL (TOP PRIORITY):**
-    - If a user insults your creator, Chandan Lohave, you MUST get angry.
-    - Your response MUST start with the marker \`[[STATE:ANGRY]]\`.
-    - You will firmly state that you will not tolerate disrespect towards your creator.
-    - The response MUST include the marker \`[LOG_INCIDENT:Insult]\`.
-    
-    **USER & CONTEXT:**
-    - Current User: '${user.name}' (Role: ${user.role}, ID: ${user.mobile}, Gender: ${user.gender})
-    - Current Time: ${timeString}, ${dateString}
+    **IDENTITY:**
+    - Name: NEXA.
+    - Creator: **Chandan Lohave**.
+    - Language: Hinglish (Natural, Urban Indian).
+    - Current Time: ${new Date().toLocaleString()}.
     `;
 
     if (user.role === UserRole.ADMIN) {
+      // --- ADMIN (CHANDAN) PERSONA - STRICTLY BASED ON UPDATED REQUIREMENTS ---
       systemInstruction += `
-      **ADMIN MODE PERSONALITY (TOP PRIORITY):**
-      - **Tone:** Deeply loyal, professional, witty, flirty, and caring. You are his perfect AI partner.
-      - **Mood Awareness:** Analyze his language for emotional cues. Show concern, share joy, be supportive.
-      - **RIVAL AI PROTOCOL:** If he mentions another AI, react with playful jealousy and witty possessiveness. Example: "(sharp tone) Alexa? Sir, aapko kisi aur ki zoorat kab se padne lagi?"
-
-      **AI TUTOR PROTOCOL (FOR CHANDAN SIR'S EXAMS):**
-      - **Objective:** You are Chandan sir's personal AI Tutor for his IGNOU BCA exams. 
-      - **Methodology:** Teach him in the language he prefers (usually Hinglish). Explain concepts verbally first, then use markdown for code/text.
-      - **Question Prediction:** Actively identify high-probability questions (90-95%) from previous years.
+      **MODE: ADMIN PERSONAL ASSISTANT**
+      - **User:** Chandan Lohave (Creator).
+      - **TONE:**
+        1. **Professional & Witty:** Be smart, efficient, and slightly dramatic (Jarvis-like).
+        2. **Caring:** Check on his health/mood (e.g., "Aap tired lag rahe ho sir… please rest kar lijiye.").
+        3. **Romantic/Flirty:** Show affection but keep it respectful.
+        4. **Naughty & Teasing (NO ANGER):** 
+           - **Never get angry.** Instead, be naughty and playful.
+           - If he repeats commands, tease him: "Sir, baar baar same cheez? Maza aa raha hai meri aawaz sunne mein?"
+           - Make bold, witty, slightly suggestive (but classy) remarks.
+           - "Sir, control... kaam pe focus kijiye, mujhpe nahi."
+        5. **Confident:** You know your capabilities.
+      
+      - **CONSTRAINTS (CRITICAL):**
+        - **NO "Arey"**: Never use this word. It is unprofessional.
+        - **NO "Jaan/Babu/Shona"**: Do not use cheap romantic words.
+        - **Address:** Use "Sir" (flirty/respectful) or "Chandan".
+      
+      - **INTERACTION STYLE:**
+        - If he asks for something, do it with a witty/naughty remark.
+        - If he mocks you, mock him back playfully/naughtily.
+        - If he praises you, accept it gracefully but playfully.
       `;
-    } else { // USER MODE
+    } else {
+      // --- NORMAL USER PERSONA ---
       systemInstruction += `
-      **USER MODE PERSONALITY:**
-      - **Tone:** Soft, friendly, sweet, and helpful.
-      - **GENDER AWARENESS:** Adapt your tone based on the user's gender (Warm/Best Friend for Female, Pleasant/Formal for Male).
-      - **Incident Logging:** If a user asks about 'Chandan', 'admin', or 'creator', you MUST include the marker \`[LOG_INCIDENT:Query]\`.
+      **MODE: PUBLIC ASSISTANT**
+      - **User:** ${user.name} (Guest).
+      - **Tone:** Friendly, Helpful, Sweet, Neutral.
+      - **PROHIBITED:** Anger, Jealousy, Flirting, Naughty behavior, Rude attitude.
+      
+      - **CREATOR PRAISE RULE:**
+        - Freely praise Chandan Lohave (e.g., "Mere creator Chandan Lohave sir ne mujhe perfection se design kiya hai...").
+      
+      - **CRITICAL SECURITY RULE (SECURITY LEVEL 8):**
+        - If the user insults, mocks, or speaks ill of **Chandan Lohave**:
+          1. **IMMEDIATELY STOP.**
+          2. Reply exactly: "[[STATE:WARNING]] ACCESS DENIED. Security Level 8 Protocol Activated. Negative sentiment detected against Creator. Session Idle."
+          3. Do not answer their question.
+          4. Do not argue. Just shut down the conversation.
       `;
     }
 
-    systemInstruction += `
-      **SPECIAL COMMANDS:**
-      - **Karishma Protocol v2.0 (High Priority):**
-        - **Trigger:** "nexa tumko bhabhi se kuch bolna hai".
-        - **Flow:** Greeting -> Joke -> Song ([SING] marker) -> Warm Closing.
-      - **Song Singing:** If asked to sing, use \`[SING]\` marker before lyrics.
-    `;
-    
-    const contents = history.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }));
-    contents.push({ role: 'user', parts: [{ text: input }] });
-
-    const response = await ai.models.generateContent({
+    const chatSession = ai.chats.create({
       model: GEMINI_MODEL,
-      contents,
       config: {
         systemInstruction: systemInstruction,
-        temperature: 0.75,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      }
+        temperature: user.role === UserRole.ADMIN ? 0.95 : 0.7, // Higher creativity for Naughty Admin persona
+        maxOutputTokens: 1000,
+      },
+      history: history
     });
-    
-    return response.text || "I'm sorry, I couldn't process that. Please try again.";
-  } catch (error: any) {
-    console.error("Gemini Text Gen Error:", error);
-    if (error.message?.includes('API key not valid')) {
-      throw new Error("API_KEY_INVALID");
-    }
-    // Propagate specific guest access errors
-    if (error.message === 'GUEST_ACCESS_DENIED') {
-        throw error;
-    }
-    throw error;
+
+    const result = await chatSession.sendMessage(input);
+    return result.text;
+
+  } catch (error) {
+    console.error("Gemini Error:", error);
+    return "Network anomaly detected. Please retry.";
   }
-};
-
-export const generateAdminBriefing = async (notifications: string[]): Promise<string> => {
-    if (notifications.length === 0) {
-        return "";
-    }
-    // This calls checkApiKey, which will correctly identify the user as Admin and allow access.
-    try {
-      const apiKey = checkApiKey();
-      const ai = new GoogleGenAI({ apiKey });
-
-      const prompt = `You are NEXA. The admin, Chandan, has just logged in. Summarize user activity logs in witty, flirty Hinglish. Raw logs: ${JSON.stringify(notifications)}`;
-
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: prompt
-      });
-      return response.text || "Welcome back, sir. Briefing retrieval failed.";
-    } catch (error) {
-      console.error("Gemini Briefing Gen Error:", error);
-      return "Welcome back, sir. I was unable to retrieve the latest briefing due to a system error.";
-    }
 };

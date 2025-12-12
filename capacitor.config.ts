@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'NEXA AI',
   webDir: 'dist',
   server: {
-    hostname: 'nexa.local',
+    // Ensures the app loads correctly from local files on the device via HTTPS scheme
     androidScheme: 'https'
   },
   plugins: {

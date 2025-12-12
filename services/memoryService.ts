@@ -1,94 +1,93 @@
-import { UserProfile, UserRole, ChatMessage } from '../types';
+import { UserProfile, UserRole, ChatMessage, StudyHubSubject } from '../types';
 
-const MAX_MEMORY_LENGTH = 30; // Max number of turns (user + model) to keep in memory for the prompt
+const STORAGE_KEYS = {
+    // Dynamic keys based on user ID to ensure total privacy separation
+    SCHEDULE: 'nexa_schedule',
+    PROFILE: 'nexa_profile',
+    NOTIFICATIONS: 'nexa_admin_incidents' 
+};
 
-// --- Core Memory Functions ---
-
-const getMemoryKey = (user: UserProfile): string => {
+// --- HELPER TO GET UNIQUE KEY ---
+const getStorageKey = (user: UserProfile, type: string) => {
     if (user.role === UserRole.ADMIN) {
-        return 'nexa_memory_admin';
+        return `nexa_data_ADMIN_${type}`;
     }
-    // Use mobile number as the unique ID for users
-    return `nexa_memory_user_${user.mobile}`;
+    return `nexa_data_USER_${user.mobile}_${type}`;
 };
 
-export const loadMemory = (user: UserProfile): ChatMessage[] => {
+// --- User Profile ---
+export const syncUserProfile = async (user: UserProfile): Promise<void> => {
+    localStorage.setItem(getStorageKey(user, 'profile'), JSON.stringify(user));
+};
+
+// --- Schedule ---
+export const getUserSchedule = async (userId: string): Promise<StudyHubSubject[]> => {
+    // For schedule we use the mobile directly as ID
+    const data = localStorage.getItem(`${STORAGE_KEYS.SCHEDULE}_${userId}`);
+    return data ? JSON.parse(data) : [];
+};
+
+export const saveUserSchedule = async (userId: string, subjects: StudyHubSubject[]): Promise<void> => {
+    localStorage.setItem(`${STORAGE_KEYS.SCHEDULE}_${userId}`, JSON.stringify(subjects));
+};
+
+// --- Chat History (Memory) ---
+export const getLocalMessages = (user: UserProfile): ChatMessage[] => {
     try {
-        const key = getMemoryKey(user);
-        const storedMemory = localStorage.getItem(key);
-        return storedMemory ? JSON.parse(storedMemory) : [];
-    } catch (error) {
-        console.error("Failed to load memory:", error);
-        return [];
-    }
+        const key = getStorageKey(user, 'messages');
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : [];
+    } catch (e) { return []; }
 };
 
-export const saveMemory = (user: UserProfile, messages: ChatMessage[]): void => {
+export const appendMessageToMemory = async (user: UserProfile, message: ChatMessage): Promise<void> => {
     try {
-        const key = getMemoryKey(user);
-        // Ensure memory doesn't grow indefinitely
-        const truncatedMessages = messages.slice(-MAX_MEMORY_LENGTH * 2);
-        localStorage.setItem(key, JSON.stringify(truncatedMessages));
-    } catch (error) {
-        console.error("Failed to save memory:", error);
-    }
+        const key = getStorageKey(user, 'messages');
+        const currentMessages = getLocalMessages(user);
+        currentMessages.push(message);
+        
+        // Keep last 50 messages strictly
+        if (currentMessages.length > 50) currentMessages.shift(); 
+
+        localStorage.setItem(key, JSON.stringify(currentMessages));
+    } catch (error) { console.error("Memory Save Error", error); }
 };
 
-export const appendMessageToMemory = (user: UserProfile, message: ChatMessage): void => {
-    const currentMemory = loadMemory(user);
-    currentMemory.push(message);
-    saveMemory(user, currentMemory);
-};
-
-export const getMemoryForPrompt = (user: UserProfile): {role: 'user' | 'assistant', content: string}[] => {
-    const memory = loadMemory(user);
-    // Return the last N messages, formatted for the Groq/OpenAI API
-    const fullHistory = memory.slice(-MAX_MEMORY_LENGTH).map(msg => ({
-        role: msg.role === 'model' ? 'assistant' as const : 'user' as const,
+export const getMemoryForPrompt = async (user: UserProfile): Promise<{role: 'user' | 'assistant', content: string}[]> => {
+    const allMessages = getLocalMessages(user);
+    // Send last 15 messages for context window
+    return allMessages.slice(-15).map(msg => ({
+        role: msg.role === 'model' ? 'assistant' : 'user',
         content: msg.text
     }));
-
-    // The API requires conversation history to start with a 'user' role.
-    const firstUserIndex = fullHistory.findIndex(msg => msg.role === 'user');
-
-    // If no user message is found (e.g., only the intro 'model' message exists),
-    // return an empty history array.
-    if (firstUserIndex === -1) {
-        return [];
-    }
-    
-    // Return the slice of history starting from the first user message to ensure validity.
-    return fullHistory.slice(firstUserIndex);
 };
 
-export const clearAllMemory = (): void => {
+export const clearAllMemory = async (user: UserProfile): Promise<void> => {
+    const key = getStorageKey(user, 'messages');
+    localStorage.removeItem(key);
+    if(user.role === UserRole.ADMIN) {
+         localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+    }
+};
+
+// --- Admin Notifications (Incidents) ---
+// These are global logs available only to Admin
+export const getAdminNotifications = async (): Promise<string[]> => {
     try {
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('nexa_memory_') || key === 'nexa_admin_notifications') {
-                localStorage.removeItem(key);
-            }
-        });
-    } catch (error) {
-        console.error("Failed to clear all memory:", error);
-    }
+        const data = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+        return data ? JSON.parse(data) : [];
+    } catch (error) { return []; }
 };
 
-// --- Admin Notification Functions ---
-
-export const getAdminNotifications = (): string[] => {
-    try {
-        const notifications = localStorage.getItem('nexa_admin_notifications');
-        return notifications ? JSON.parse(notifications) : [];
-    } catch (error) {
-        console.error("Failed to get admin notifications:", error);
-        return [];
-    }
-};
+export const logAdminNotification = (note: string) => {
+     try {
+        const current = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+        const arr = current ? JSON.parse(current) : [];
+        arr.push(note);
+        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(arr));
+    } catch (error) { console.error("Log Error", error); }
+}
 
 export const clearAdminNotifications = (): void => {
-    try {
-        localStorage.setItem('nexa_admin_notifications', '[]');
-    } catch (error) {
-        console.error("Failed to clear admin notifications:", error);
-    }
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, '[]');
 };
