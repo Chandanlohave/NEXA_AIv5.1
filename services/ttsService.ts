@@ -1,6 +1,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { UserProfile, UserRole } from "../types";
-import { getAudioContext } from "./audioService";
+import { getAudioContext, playErrorSound } from "./audioService";
 
 const NEXA_VOICE = 'Zephyr'; 
 const CACHE_VERSION = 'v15_hindi_script_fix';
@@ -41,8 +41,20 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
   return buffer;
 }
 
-const playAudioBuffer = (buffer: AudioBuffer, onStart: () => void, onEnd: () => void) => {
+const playAudioBuffer = async (buffer: AudioBuffer, onStart: () => void, onEnd: () => void) => {
     const ctx = getAudioContext();
+    
+    // CRITICAL FIX FOR MOBILE:
+    // If the API took too long, the browser might have suspended the audio context.
+    // We must resume it strictly within a user-initiated flow or ensure it's running before start().
+    if (ctx.state === 'suspended') {
+        try { 
+            await ctx.resume(); 
+        } catch (e) { 
+            console.error("Audio resume failed during playback start", e); 
+        }
+    }
+
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
@@ -56,6 +68,7 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
     stop();
     
     const ctx = getAudioContext();
+    // Initial resume attempt
     if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch (e) { console.error("TTS Resume Error", e); }
     }
@@ -113,6 +126,7 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
 
     } catch (error: any) {
         console.warn("TTS Failed:", error);
+        playErrorSound(); // FEEDBACK: Play error sound so user knows it failed
         onEnd();
     }
 };

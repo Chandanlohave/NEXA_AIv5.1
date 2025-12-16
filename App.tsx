@@ -283,6 +283,8 @@ const App: React.FC = () => {
             );
 
         } catch (error: any) {
+             console.error("Intro Error:", error);
+             playErrorSound(); // FEEDBACK: Play error sound so user knows API failed
              isProcessingRef.current = false;
              setHudState(HUDState.IDLE);
         }

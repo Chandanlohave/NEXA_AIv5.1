@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexa-cache-v10-prod';
+const CACHE_NAME = 'nexa-cache-v11-prod';
 const APP_SHELL_URLS = [
   '/',
   '/index.html',

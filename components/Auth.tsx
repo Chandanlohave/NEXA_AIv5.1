@@ -88,7 +88,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP TO CONNECT');
 
   // Check connectivity options
-  const hasSystemKey = !!process.env.API_KEY;
+  const hasSystemKey = !!process.env.API_KEY && process.env.API_KEY !== 'undefined' && process.env.API_KEY.trim() !== '';
   const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
 
   useEffect(() => {
@@ -222,6 +222,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               </span>
               {hasCustomKey && <div className="absolute top-1 right-1 w-2 h-2 bg-nexa-cyan rounded-full animate-pulse"></div>}
           </button>
+      )}
+
+      {/* MISSING KEY WARNING */}
+      {mode === 'INIT' && !hasSystemKey && !hasCustomKey && (
+          <div className="absolute top-20 bg-red-500/10 border border-red-500/50 px-4 py-2 rounded text-[10px] text-red-500 font-mono animate-pulse z-[70]">
+              SYSTEM WARNING: HOST API KEY MISSING
+          </div>
       )}
 
       <div className="relative w-full max-w-sm z-50">
