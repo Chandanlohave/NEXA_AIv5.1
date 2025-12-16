@@ -6,12 +6,10 @@ import { syncUserProfile } from '../services/memoryService';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
-  onResume?: () => void;      // New prop for resuming session
-  isResuming?: boolean;       // New prop to check if we are just unlocking
-  savedUserName?: string;     // Name to display if resuming
+  onResume?: () => void;      
+  isResuming?: boolean;       
+  savedUserName?: string;     
 }
-
-// --- VISUAL COMPONENTS ---
 
 const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan', className = '' }: any) => {
   const colorClass = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan';
@@ -67,28 +65,25 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
 );
 
 
-// --- MAIN AUTH COMPONENT ---
-
 const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, savedUserName = '' }) => {
   const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'KEY_INPUT'>('INIT');
   
   const [formData, setFormData] = useState({
     name: '',
-    mobile: '', // Used as unique ID
+    mobile: '', 
     gender: 'male',
-    username: '', // Admin login
-    password: '', // Admin login
+    username: '', 
+    password: '', 
     customApiKey: localStorage.getItem('nexa_client_api_key') || ''
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
-  // Dynamic Text based on whether we are resuming or starting fresh
   const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP TO CONNECT');
 
-  // Check connectivity options
-  const hasSystemKey = !!process.env.API_KEY && process.env.API_KEY !== 'undefined' && process.env.API_KEY.trim() !== '';
+  // Check env variable injected by vite define
+  const hasSystemKey = (!!process.env.API_KEY && process.env.API_KEY !== 'undefined' && process.env.API_KEY !== '');
   const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
 
   useEffect(() => {
@@ -98,7 +93,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
 
     if (mode === 'INIT') {
       headerInterval = setInterval(() => setGlitchText(headerTexts[Math.floor(Math.random() * headerTexts.length)]), 2000);
-      // Only cycle status text if NOT resuming. If resuming, we keep it steady.
       if (!isResuming) {
         statusInterval = setInterval(() => setInitStatusText(statusTexts[Math.floor(Math.random() * statusTexts.length)]), 2500);
       }
@@ -115,15 +109,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   };
 
   const handlePowerUpClick = async () => {
-    // 1. IMPORTANT: Initialize global audio context here on direct user gesture
     await initGlobalAudio();
     playStartupSound();
 
-    // 2. Branch Logic
     if (isResuming && onResume) {
         setLoading(true);
         setInitStatusText('RESTORING SESSION...');
-        // Small delay for effect
         setTimeout(() => {
             onResume(); 
         }, 1000);
@@ -203,17 +194,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
 
   return (
     <div className="fixed inset-0 bg-zinc-100 dark:bg-black flex flex-col items-center justify-center p-6 z-[60] overflow-hidden transition-colors duration-500">
-      {/* Visual Background Effects */}
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       
-      {/* Header Info */}
       <div className="absolute top-8 text-center animate-fade-in z-50">
           <div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em]">{isResuming ? 'WELCOME BACK' : 'CREATED BY'}</div>
           <div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.2em]">{isResuming ? savedUserName?.toUpperCase() : 'CHANDAN LOHAVE'}</div>
       </div>
       
-      {/* Top Right Config Button (Only show if not resuming, or make it accessible) */}
       {mode === 'INIT' && (
           <button onClick={() => setMode('KEY_INPUT')} className="absolute top-6 right-6 p-2 text-nexa-cyan/50 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/30 transition-all z-[70] group">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
@@ -224,17 +212,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
           </button>
       )}
 
-      {/* MISSING KEY WARNING */}
+      {/* MISSING KEY WARNING - Improved Visibility */}
       {mode === 'INIT' && !hasSystemKey && !hasCustomKey && (
-          <div className="absolute top-20 bg-red-500/10 border border-red-500/50 px-4 py-2 rounded text-[10px] text-red-500 font-mono animate-pulse z-[70]">
-              SYSTEM WARNING: HOST API KEY MISSING
+          <div className="absolute top-24 max-w-xs text-center bg-red-500/10 border border-red-500/50 px-4 py-3 rounded text-[10px] text-red-500 font-mono animate-pulse z-[70] shadow-[0_0_20px_rgba(220,38,38,0.2)]">
+              ⚠️ HOST API KEY MISSING<br/>
+              <span className="opacity-70">App will be offline. Set VITE_API_KEY in Vercel.</span>
           </div>
       )}
 
       <div className="relative w-full max-w-sm z-50">
         <div className={`absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div>
         
-        {/* Main Card Content */}
         <div className={`backdrop-blur-md border p-6 relative transition-all duration-500 ${mode === 'ADMIN' ? 'bg-red-900/10 border-red-500/20' : 'bg-white/60 dark:bg-black/60 border-zinc-200 dark:border-nexa-cyan/10'}`}>
           {error && <div className="mb-6 p-2 bg-red-900/20 border-l-2 border-red-500 text-red-500 text-[10px] font-mono tracking-wider animate-pulse">{error}</div>}
           
@@ -244,7 +232,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                   <div className={`absolute inset-0 rounded-full border-2 ${loading ? 'border-t-nexa-cyan border-r-nexa-cyan border-b-transparent border-l-transparent animate-spin' : 'border-nexa-cyan/30'} transition-all duration-500`}></div>
                   <div className={`absolute inset-2 rounded-full border ${loading ? 'border-t-transparent border-r-transparent border-b-nexa-cyan border-l-nexa-cyan animate-spin-reverse-slow' : 'border-nexa-cyan/20'} transition-all duration-500`}></div>
                   
-                  {/* Reactor Core */}
                   <div className={`w-24 h-24 rounded-full bg-nexa-cyan/10 backdrop-blur-md flex items-center justify-center border border-nexa-cyan/50 shadow-[0_0_15px_rgba(41,223,255,0.3)] group-hover:shadow-[0_0_25px_rgba(41,223,255,0.6)] transition-all duration-500`}>
                       <div className="text-3xl font-bold text-nexa-cyan tracking-wider animate-pulse">NEXA</div>
                   </div>
@@ -254,7 +241,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               </div>
               {hasCustomKey && <div className="mt-2 px-2 py-1 bg-nexa-cyan/10 border border-nexa-cyan/30 text-[9px] text-nexa-cyan tracking-widest font-mono">USING CUSTOM KEY</div>}
               
-              {/* Show Logout Option if Resuming */}
               {isResuming && (
                   <button 
                     onClick={() => {

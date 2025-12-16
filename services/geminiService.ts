@@ -7,9 +7,12 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const checkApiKey = () => {
   const customKey = localStorage.getItem('nexa_client_api_key');
   if (customKey && customKey.trim().length > 10) return customKey;
+  
+  // Check process.env.API_KEY defined in vite.config.ts
   const systemKey = process.env.API_KEY;
+  
   if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
-  throw new Error("GUEST_ACCESS_DENIED");
+  throw new Error("MISSING_API_KEY");
 };
 
 export const getStudyHubSchedule = (): StudyHubSubject[] => {
@@ -101,7 +104,6 @@ export const generateTextResponse = async (
     const apiKey = checkApiKey();
     const ai = new GoogleGenAI({ apiKey });
     const history = await getMemoryForPrompt(user);
-    const now = new Date();
 
     let systemInstruction = `
     **IDENTITY:**
@@ -151,7 +153,18 @@ export const generateTextResponse = async (
     const result = await chatSession.sendMessage({ message: input });
     return result.text;
 
-  } catch (error) {
-    return "Network anomaly detected.";
+  } catch (error: any) {
+    console.error("Gemini Error:", error);
+    
+    if (error.message === "MISSING_API_KEY") {
+        return "SYSTEM ALERT: Host API Key Not Configured. Please set VITE_API_KEY in Vercel Settings.";
+    }
+    
+    // Check for common API errors
+    if (error.message?.includes('403')) return "API ERROR: Quota Exceeded or Invalid Key.";
+    if (error.message?.includes('503')) return "API ERROR: Service Overloaded.";
+    if (error.message?.includes('fetch failed')) return "CONNECTION ERROR: Check your internet.";
+
+    return `ERROR: ${error.message || "Unknown Network Issue"}`;
   }
 };

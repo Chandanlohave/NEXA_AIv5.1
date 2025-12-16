@@ -10,9 +10,12 @@ let currentSource: AudioBufferSourceNode | null = null;
 const checkApiKey = () => {
   const customKey = localStorage.getItem('nexa_client_api_key');
   if (customKey && customKey.trim().length > 10) return customKey;
+  
+  // Check process.env.API_KEY
   const systemKey = process.env.API_KEY;
+  
   if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
-  throw new Error("GUEST_ACCESS_DENIED");
+  throw new Error("MISSING_API_KEY");
 };
 
 function decodeBase64(base64: string) {
@@ -45,8 +48,6 @@ const playAudioBuffer = async (buffer: AudioBuffer, onStart: () => void, onEnd: 
     const ctx = getAudioContext();
     
     // CRITICAL FIX FOR MOBILE:
-    // If the API took too long, the browser might have suspended the audio context.
-    // We must resume it strictly within a user-initiated flow or ensure it's running before start().
     if (ctx.state === 'suspended') {
         try { 
             await ctx.resume(); 
@@ -68,7 +69,6 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
     stop();
     
     const ctx = getAudioContext();
-    // Initial resume attempt
     if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch (e) { console.error("TTS Resume Error", e); }
     }
@@ -90,9 +90,6 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
         
-        // --- PRONUNCIATION FIXES ---
-        // CRITICAL UPDATE: Using direct Hindi Devanagari script for the surname.
-        // This forces the model to pronounce it exactly as "लोहवे"
         let pronunciationText = text
             .replace(/Lohave/gi, "लोहवे") 
             .replace(/Chandan/gi, "Chandan")
@@ -125,8 +122,8 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         playAudioBuffer(audioBuffer, onStart, onEnd);
 
     } catch (error: any) {
-        console.warn("TTS Failed:", error);
-        playErrorSound(); // FEEDBACK: Play error sound so user knows it failed
+        console.error("TTS Generation Failed:", error);
+        playErrorSound(); 
         onEnd();
     }
 };
