@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
-import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
+import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound, initGlobalAudio } from '../services/audioService';
 import InstallPWAButton from './InstallPWAButton';
 import { syncUserProfile } from '../services/memoryService';
 
@@ -114,8 +114,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
     setError('');
   };
 
-  const handlePowerUpClick = () => {
-    // 1. Initialize Audio (Browser Restriction Hack)
+  const handlePowerUpClick = async () => {
+    // 1. IMPORTANT: Initialize global audio context here on direct user gesture
+    await initGlobalAudio();
     playStartupSound();
 
     // 2. Branch Logic

@@ -1,40 +1,48 @@
 // A self-contained service for generating UI sound effects using the Web Audio API.
 
-let audioCtx: AudioContext | null = null;
-let isInitialized = false;
+// SINGLETON AUDIO CONTEXT FOR THE WHOLE APP
+let globalAudioCtx: AudioContext | null = null;
+
+export const getAudioContext = (): AudioContext => {
+    if (!globalAudioCtx && typeof window !== 'undefined') {
+        // Create context with specific sample rate for better compatibility with Gemini TTS
+        globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ 
+            sampleRate: 24000,
+            latencyHint: 'interactive'
+        });
+    }
+    return globalAudioCtx!;
+};
 
 /**
- * Initializes the AudioContext. Must be called from a user gesture (e.g., click).
- * This is crucial for audio to work on mobile browsers.
+ * Crucial: Call this on the first user interaction (click/tap)
  */
-const initAudio = () => {
-    if (isInitialized || typeof window === 'undefined') return;
-    try {
-        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        // A common trick to "unlock" the audio context on mobile browsers
-        const buffer = audioCtx.createBuffer(1, 1, 22050);
-        const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
-        source.start(0);
-        isInitialized = true;
-    } catch (e) {
-        console.error("AudioService: Failed to initialize AudioContext.", e);
+export const initGlobalAudio = async () => {
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+        await ctx.resume();
     }
+    
+    // Play a silent buffer to fully "warm up" the audio pipeline on iOS/Android
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
 };
 
 const play = (nodes: (ctx: AudioContext, time: number) => AudioNode[]) => {
-    if (!audioCtx) initAudio();
-    if (!audioCtx) return;
-
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
+    const ctx = getAudioContext();
+    
+    // Ensure active
+    if (ctx.state === 'suspended') {
+        ctx.resume().catch(e => console.error("Audio resume failed", e));
     }
     
-    const now = audioCtx.currentTime;
-    const soundNodes = nodes(audioCtx, now);
+    const now = ctx.currentTime;
+    const soundNodes = nodes(ctx, now);
     if (soundNodes.length > 0) {
-        soundNodes[soundNodes.length-1].connect(audioCtx.destination);
+        soundNodes[soundNodes.length-1].connect(ctx.destination);
     }
 };
 
@@ -119,14 +127,12 @@ export const playUserLoginSound = () => {
 };
 
 export const playAdminLoginSound = () => {
-    // New, soft, digital chime for "Access Granted"
     play((ctx, now) => {
         const gainNode = ctx.createGain();
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(0.25, now + 0.01);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
 
-        // A pleasant, rising arpeggio
         const notes = ['C5', 'E5', 'G5', 'C6'];
         notes.forEach((note, i) => {
             const osc = ctx.createOscillator();
@@ -145,7 +151,6 @@ export const playAdminLoginSound = () => {
             osc.stop(now + i * 0.08 + 1);
         });
         
-        // Subtle digital shimmer effect
         const shimmer = ctx.createOscillator();
         shimmer.type = 'triangle';
         shimmer.frequency.value = getNoteFrequency('G6');
@@ -196,13 +201,12 @@ export const playMicOffSound = () => {
 };
 
 export const playErrorSound = () => {
-    // This sound is used for the security alert when switching to admin console.
     play((ctx, now) => {
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.15, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
-        [440, 466.16].forEach(freq => { // A and A# for a dissonant alert sound
+        [440, 466.16].forEach(freq => { 
             const osc = ctx.createOscillator();
             osc.type = 'square';
             osc.frequency.value = freq;
@@ -229,7 +233,6 @@ export const playSystemNotificationSound = () => {
         osc.start(now);
         osc.stop(now + 0.3);
         
-        // Add a second layer for "tech" feel
         const osc2 = ctx.createOscillator();
         osc2.type = 'square';
         osc2.frequency.setValueAtTime(100, now);
@@ -246,21 +249,10 @@ export const playSystemNotificationSound = () => {
     });
 };
 
-
-// Helper to get frequencies for notes
 const noteFrequencies: { [note: string]: number } = {
-    'C4': 261.63,
-    'G4': 392.00,
-    'C5': 523.25,
-    'E5': 659.25,
-    'G5': 783.99,
-    'A5': 880.00,
-    'C6': 1046.50,
-    'C#6': 1108.73,
-    'E6': 1318.51,
-    'F#6': 1479.98,
-    'A6': 1760.00,
-    'G6': 1567.98,
+    'C4': 261.63, 'G4': 392.00, 'C5': 523.25, 'E5': 659.25, 'G5': 783.99,
+    'A5': 880.00, 'C6': 1046.50, 'C#6': 1108.73, 'E6': 1318.51, 'F#6': 1479.98,
+    'A6': 1760.00, 'G6': 1567.98,
 };
 
 const getNoteFrequency = (note: string): number => {
