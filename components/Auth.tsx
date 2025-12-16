@@ -6,6 +6,9 @@ import { syncUserProfile } from '../services/memoryService';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
+  onResume?: () => void;      // New prop for resuming session
+  isResuming?: boolean;       // New prop to check if we are just unlocking
+  savedUserName?: string;     // Name to display if resuming
 }
 
 // --- VISUAL COMPONENTS ---
@@ -66,7 +69,7 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
 
 // --- MAIN AUTH COMPONENT ---
 
-const Auth: React.FC<AuthProps> = ({ onLogin }) => {
+const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, savedUserName = '' }) => {
   const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'KEY_INPUT'>('INIT');
   
   const [formData, setFormData] = useState({
@@ -81,12 +84,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
-  const [initStatusText, setInitStatusText] = useState('TAP TO CONNECT');
+  // Dynamic Text based on whether we are resuming or starting fresh
+  const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP TO CONNECT');
 
   // Check connectivity options
   const hasSystemKey = !!process.env.API_KEY;
   const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
-  const isFullyOffline = !hasSystemKey && !hasCustomKey;
 
   useEffect(() => {
     const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_USER', 'NEXA_PROTOCOL'];
@@ -95,24 +98,39 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
     if (mode === 'INIT') {
       headerInterval = setInterval(() => setGlitchText(headerTexts[Math.floor(Math.random() * headerTexts.length)]), 2000);
-      statusInterval = setInterval(() => setInitStatusText(statusTexts[Math.floor(Math.random() * statusTexts.length)]), 2500);
+      // Only cycle status text if NOT resuming. If resuming, we keep it steady.
+      if (!isResuming) {
+        statusInterval = setInterval(() => setInitStatusText(statusTexts[Math.floor(Math.random() * statusTexts.length)]), 2500);
+      }
     } else {
       setGlitchText('ACCESS_GATEWAY');
     }
 
     return () => { clearInterval(headerInterval); clearInterval(statusInterval); };
-  }, [mode]);
+  }, [mode, isResuming]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError('');
   };
 
-  const initiateSystem = () => {
+  const handlePowerUpClick = () => {
+    // 1. Initialize Audio (Browser Restriction Hack)
     playStartupSound();
-    setLoading(true);
-    setInitStatusText('AUTHENTICATING...'); // Immediate feedback
-    setTimeout(() => { setLoading(false); setMode('USER_CREATE'); }, 1500);
+
+    // 2. Branch Logic
+    if (isResuming && onResume) {
+        setLoading(true);
+        setInitStatusText('RESTORING SESSION...');
+        // Small delay for effect
+        setTimeout(() => {
+            onResume(); 
+        }, 1000);
+    } else {
+        setLoading(true);
+        setInitStatusText('AUTHENTICATING...');
+        setTimeout(() => { setLoading(false); setMode('USER_CREATE'); }, 1500);
+    }
   };
 
   const handleAdminLogin = () => {
@@ -187,9 +205,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       {/* Visual Background Effects */}
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
-      <div className="absolute top-8 text-center animate-fade-in z-50"><div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em]">CREATED BY</div><div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.2em]">CHANDAN LOHAVE</div></div>
       
-      {/* Top Right Config Button */}
+      {/* Header Info */}
+      <div className="absolute top-8 text-center animate-fade-in z-50">
+          <div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em]">{isResuming ? 'WELCOME BACK' : 'CREATED BY'}</div>
+          <div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.2em]">{isResuming ? savedUserName?.toUpperCase() : 'CHANDAN LOHAVE'}</div>
+      </div>
+      
+      {/* Top Right Config Button (Only show if not resuming, or make it accessible) */}
       {mode === 'INIT' && (
           <button onClick={() => setMode('KEY_INPUT')} className="absolute top-6 right-6 p-2 text-nexa-cyan/50 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/30 transition-all z-[70] group">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
@@ -209,7 +232,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           
           {mode === 'INIT' && (
             <div className="flex flex-col items-center py-10 animate-fade-in relative">
-              <div onClick={initiateSystem} className="relative w-40 h-40 flex items-center justify-center cursor-pointer group">
+              <div onClick={handlePowerUpClick} className="relative w-40 h-40 flex items-center justify-center cursor-pointer group">
                   <div className={`absolute inset-0 rounded-full border-2 ${loading ? 'border-t-nexa-cyan border-r-nexa-cyan border-b-transparent border-l-transparent animate-spin' : 'border-nexa-cyan/30'} transition-all duration-500`}></div>
                   <div className={`absolute inset-2 rounded-full border ${loading ? 'border-t-transparent border-r-transparent border-b-nexa-cyan border-l-nexa-cyan animate-spin-reverse-slow' : 'border-nexa-cyan/20'} transition-all duration-500`}></div>
                   
@@ -218,8 +241,23 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                       <div className="text-3xl font-bold text-nexa-cyan tracking-wider animate-pulse">NEXA</div>
                   </div>
               </div>
-              <div className="mt-8 text-nexa-cyan/60 font-mono text-xs tracking-[0.3em] animate-pulse">{initStatusText}</div>
+              <div className="mt-8 text-nexa-cyan/60 font-mono text-xs tracking-[0.3em] animate-pulse">
+                  {isResuming ? 'TAP TO RESUME' : initStatusText}
+              </div>
               {hasCustomKey && <div className="mt-2 px-2 py-1 bg-nexa-cyan/10 border border-nexa-cyan/30 text-[9px] text-nexa-cyan tracking-widest font-mono">USING CUSTOM KEY</div>}
+              
+              {/* Show Logout Option if Resuming */}
+              {isResuming && (
+                  <button 
+                    onClick={() => {
+                        localStorage.removeItem('nexa_user');
+                        window.location.reload();
+                    }}
+                    className="mt-6 text-[9px] text-zinc-500 hover:text-red-500 font-mono tracking-widest border-b border-zinc-800 hover:border-red-500 transition-colors"
+                  >
+                    DIFFERENT USER?
+                  </button>
+              )}
             </div>
           )}
 
