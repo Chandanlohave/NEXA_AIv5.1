@@ -214,6 +214,38 @@ export const playErrorSound = () => {
     });
 };
 
+export const playSystemNotificationSound = () => {
+    play((ctx, now) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+        
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.3);
+        
+        // Add a second layer for "tech" feel
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(100, now);
+        osc2.frequency.linearRampToValueAtTime(200, now + 0.1);
+        const gain2 = ctx.createGain();
+        gain2.gain.setValueAtTime(0.05, now);
+        gain2.gain.linearRampToValueAtTime(0, now + 0.1);
+        
+        osc2.connect(gain2);
+        osc2.start(now);
+        osc2.stop(now + 0.1);
+
+        return [gain, gain2];
+    });
+};
+
 
 // Helper to get frequencies for notes
 const noteFrequencies: { [note: string]: number } = {
