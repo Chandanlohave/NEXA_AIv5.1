@@ -3,7 +3,7 @@ import { UserProfile, UserRole } from "../types";
 import { getAudioContext } from "./audioService";
 
 const NEXA_VOICE = 'Zephyr'; 
-const CACHE_VERSION = 'v10_fallback_enabled';
+const CACHE_VERSION = 'v11_simple_prompt';
 
 let currentSource: AudioBufferSourceNode | null = null;
 
@@ -27,18 +27,13 @@ function decodeBase64(base64: string) {
 
 // Convert 24k Gemini output to Device AudioContext rate
 async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-  // Gemini TTS is 24000Hz fixed
   const geminiSampleRate = 24000; 
   const numChannels = 1;
   const dataInt16 = new Int16Array(data.buffer);
-  
-  // Create a buffer at 24k. Web Audio API handles the resampling to hardware rate automatically.
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, geminiSampleRate);
-  
   const channelData = buffer.getChannelData(0);
   for (let i = 0; i < frameCount; i++) {
-    // Normalize Int16 to Float32 [-1.0, 1.0]
     channelData[i] = dataInt16[i] / 32768.0;
   }
   return buffer;
@@ -86,7 +81,6 @@ const playNativeTTS = (text: string, onStart: () => void, onEnd: () => void) => 
 const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, onStart: () => void, onEnd: () => void) => {
     stop();
     
-    // IMPORTANT: Get the globally unlocked AudioContext
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch (e) { console.error("TTS Resume Error", e); }
@@ -110,51 +104,17 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
         
-        // --- STRICT PRONUNCIATION ENFORCEMENT ---
+        // --- SIMPLIFIED PRONUNCIATION ---
+        // We do strictly text replacement. No complex instructions to avoiding safety filters.
         let pronunciationText = text
-            .replace(/Lohave/gi, "लोहवे")
-            .replace(/Chandan/gi, "चंदन")
+            .replace(/Lohave/gi, "Loh-Havay") // Phonetic spelling for TTS
+            .replace(/Chandan/gi, "Chun-dun")
             .replace(/NEXA/g, "Nexa");
-        
-        const now = new Date();
-        const currentHour = now.getHours();
-        const isNightMode = currentHour >= 23 || currentHour < 4;
 
-        let ttsPrompt = "";
-        
-        const pronunciationRules = `
-        PRONUNCIATION RULES (CRITICAL):
-        1. "लोहवे" MUST be pronounced as "Loh-Ha-Vay" (लो-ह-वे). Ensure the 'Ha' and 'Ve' are distinct. DO NOT say "Lohe".
-        2. "चंदन" MUST be pronounced as "Chun-Dun".
-        3. Speak naturally in Hinglish.
-        `;
-        
-        if (user.role === UserRole.ADMIN) {
-            ttsPrompt = `
-            Act as NEXA, a futuristic AI assistant.
-            Target User: Admin (Chandan Lohave).
-            TEXT TO SPEAK: "${pronunciationText}"
-            INSTRUCTIONS:
-            1. LANGUAGE: Hinglish (Hindi + English).
-            2. ${pronunciationRules}
-            3. TONE:
-               ${isNightMode 
-                 ? "- MODE: NIGHT (11PM+). Be Flirty, Teasing, Naughty. **DO NOT WHISPER**. Speak clearly." 
-                 : "- MODE: DAY. Be Professional, Loyal, Witty, and Confident."}
-            4. VOICE STYLE: Female, Realistic, Indian Accent.
-            `;
-        } else {
-             ttsPrompt = `
-            Act as NEXA, a professional AI assistant.
-            Target User: Guest User.
-            TEXT TO SPEAK: "${pronunciationText}"
-            INSTRUCTIONS:
-            1. LANGUAGE: Hinglish (Hindi + English).
-            2. ${pronunciationRules}
-            3. TONE: Friendly, Polite, Helpful, Neutral.
-            4. VOICE STYLE: Female, Realistic, Indian Accent.
-            `;
-        }
+        // Simple prompt: Just read the text.
+        // Complex persona instructions here cause the model to flag content and fail.
+        // The text generation step already handles the "Naughty/Professional" wording.
+        const ttsPrompt = `Say the following text clearly in a natural Indian accent: "${pronunciationText}"`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
@@ -166,7 +126,9 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         });
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) throw new Error("No audio data returned from Gemini.");
+        
+        // If we get here but no audio, throw specific error
+        if (!base64Audio) throw new Error("API returned success but no audio data.");
 
         if (cacheKey) {
             localStorage.setItem(`${cacheKey}_${NEXA_VOICE}_${CACHE_VERSION}`, base64Audio);
@@ -177,8 +139,10 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         playAudioBuffer(audioBuffer, onStart, onEnd);
 
     } catch (error: any) {
-        console.warn("NEXA Voice Engine Failed, Switching to Backup Protocol.", error);
-        // CRITICAL FALLBACK: Use Native Browser TTS if Gemini Fails
+        console.warn("Gemini TTS Failed. Error details:", error);
+        
+        // If it's a safety rating issue, we might want to know, but for now, fallback.
+        // Fallback to robotic voice ONLY if Gemini fails completely.
         playNativeTTS(text, onStart, onEnd);
     }
 };
@@ -192,12 +156,10 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
 };
 
 export const stop = (): void => {
-    // Stop AudioContext Sound
     if (currentSource) {
         try { currentSource.stop(); } catch (e) {}
         currentSource = null;
     }
-    // Stop Native TTS
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
     }
