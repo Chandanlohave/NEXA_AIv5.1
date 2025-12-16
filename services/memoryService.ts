@@ -53,12 +53,12 @@ export const appendMessageToMemory = async (user: UserProfile, message: ChatMess
     } catch (error) { console.error("Memory Save Error", error); }
 };
 
-export const getMemoryForPrompt = async (user: UserProfile): Promise<{role: 'user' | 'assistant', content: string}[]> => {
+export const getMemoryForPrompt = async (user: UserProfile): Promise<{role: 'user' | 'model', parts: {text: string}[]}[]> => {
     const allMessages = getLocalMessages(user);
     // Send last 15 messages for context window
     return allMessages.slice(-15).map(msg => ({
-        role: msg.role === 'model' ? 'assistant' : 'user',
-        content: msg.text
+        role: msg.role === 'model' ? 'model' : 'user', // FIX: Changed 'assistant' to 'model'
+        parts: [{ text: msg.text }]
     }));
 };
 

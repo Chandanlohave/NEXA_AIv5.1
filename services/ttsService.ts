@@ -2,29 +2,16 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { UserProfile, UserRole } from "../types";
 
 const NEXA_VOICE = 'Zephyr'; 
-const CACHE_VERSION = 'v4_emotional'; // Bump version for new style
+const CACHE_VERSION = 'v8_hinglish_pronunciation_fix'; // Bump version for fresh audio
 
 let audioCtx: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
 
 const checkApiKey = () => {
   const customKey = localStorage.getItem('nexa_client_api_key');
-  if (customKey) return customKey;
-
-  const userStr = localStorage.getItem('nexa_user');
-  let isOwner = false;
-  if (userStr) {
-      try {
-          const user = JSON.parse(userStr);
-          if (user.role === 'ADMIN') isOwner = true;
-      } catch (e) {}
-  }
-
-  if (isOwner) {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API_KEY_MISSING");
-      return apiKey;
-  }
+  if (customKey && customKey.trim().length > 10) return customKey;
+  const systemKey = process.env.API_KEY;
+  if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
   throw new Error("GUEST_ACCESS_DENIED");
 };
 
@@ -92,23 +79,56 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
         
-        let forcedText = text.replace(/Lohave/gi, "लोहवे").replace(/लोहावे/g, "लोहवे").replace(/Chandan/gi, "चंदन");
+        // --- STRICT PRONUNCIATION ENFORCEMENT ---
+        // We replace English names with Hindi text.
+        // Critical: "Lohave" -> "लोहवे"
+        let pronunciationText = text
+            .replace(/Lohave/gi, "लोहवे")
+            .replace(/Chandan/gi, "चंदन")
+            .replace(/NEXA/g, "Nexa");
         
-        // --- KEY CHANGE: EMOTIONAL TTS PROMPTING ---
+        const now = new Date();
+        const currentHour = now.getHours();
+        const isNightMode = currentHour >= 23 || currentHour < 4;
+
         let ttsPrompt = "";
+        
+        // Common pronunciation rules block to ensure consistency
+        const pronunciationRules = `
+        PRONUNCIATION RULES (CRITICAL):
+        1. "लोहवे" MUST be pronounced as "Loh-Ha-Vay" (लो-ह-वे). Ensure the 'Ha' and 'Ve' are distinct. DO NOT say "Lohe".
+        2. "चंदन" MUST be pronounced as "Chun-Dun".
+        3. Speak naturally in Hinglish.
+        `;
+        
         if (user.role === UserRole.ADMIN) {
             ttsPrompt = `
-            Task: Speak the text as a loving, slightly flirty girlfriend whispering to her partner.
-            Tone: Breathy, soft, expressive, warm. Not robotic.
-            Style: Indian English accent.
-            Text: "${forcedText}"
+            Act as NEXA, a futuristic AI assistant.
+            Target User: Admin (Chandan Lohave).
+            
+            TEXT TO SPEAK: "${pronunciationText}"
+            
+            INSTRUCTIONS:
+            1. LANGUAGE: Hinglish (Hindi + English).
+            2. ${pronunciationRules}
+            3. TONE:
+               ${isNightMode 
+                 ? "- MODE: NIGHT (11PM+). Be Flirty, Teasing, Naughty. **DO NOT WHISPER**. Speak clearly." 
+                 : "- MODE: DAY. Be Professional, Loyal, Witty, and Confident."}
+            4. VOICE STYLE: Female, Realistic, Indian Accent.
             `;
         } else {
              ttsPrompt = `
-            Task: Speak the text as a helpful, professional AI assistant.
-            Tone: Friendly, clear, energetic.
-            Style: Indian English accent.
-            Text: "${forcedText}"
+            Act as NEXA, a professional AI assistant.
+            Target User: Guest User.
+            
+            TEXT TO SPEAK: "${pronunciationText}"
+            
+            INSTRUCTIONS:
+            1. LANGUAGE: Hinglish (Hindi + English).
+            2. ${pronunciationRules}
+            3. TONE: Friendly, Polite, Helpful, Neutral.
+            4. VOICE STYLE: Female, Realistic, Indian Accent.
             `;
         }
 
