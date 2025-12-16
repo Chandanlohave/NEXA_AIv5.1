@@ -1,9 +1,9 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { UserProfile, UserRole } from "../types";
-import { getAudioContext, initGlobalAudio } from "./audioService";
+import { getAudioContext } from "./audioService";
 
 const NEXA_VOICE = 'Zephyr'; 
-const CACHE_VERSION = 'v9_shared_audio_fix';
+const CACHE_VERSION = 'v10_fallback_enabled';
 
 let currentSource: AudioBufferSourceNode | null = null;
 
@@ -25,14 +25,20 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
+// Convert 24k Gemini output to Device AudioContext rate
 async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-  const sampleRate = 24000;
+  // Gemini TTS is 24000Hz fixed
+  const geminiSampleRate = 24000; 
   const numChannels = 1;
   const dataInt16 = new Int16Array(data.buffer);
+  
+  // Create a buffer at 24k. Web Audio API handles the resampling to hardware rate automatically.
   const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const buffer = ctx.createBuffer(numChannels, frameCount, geminiSampleRate);
+  
   const channelData = buffer.getChannelData(0);
   for (let i = 0; i < frameCount; i++) {
+    // Normalize Int16 to Float32 [-1.0, 1.0]
     channelData[i] = dataInt16[i] / 32768.0;
   }
   return buffer;
@@ -47,6 +53,34 @@ const playAudioBuffer = (buffer: AudioBuffer, onStart: () => void, onEnd: () => 
     source.start();
     currentSource = source;
     onStart();
+};
+
+// Fallback: Use Browser's Native TTS if AI TTS fails
+const playNativeTTS = (text: string, onStart: () => void, onEnd: () => void) => {
+    if (!('speechSynthesis' in window)) {
+        onEnd();
+        return;
+    }
+    
+    // Stop any current speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.1;
+    
+    // Try to find a good English/Hindi voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes('Google') && v.lang.includes('en')) || 
+                           voices.find(v => v.lang.includes('en-IN')) ||
+                           voices[0];
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    utterance.onstart = onStart;
+    utterance.onend = onEnd;
+    utterance.onerror = onEnd;
+
+    window.speechSynthesis.speak(utterance);
 };
 
 const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, onStart: () => void, onEnd: () => void) => {
@@ -132,7 +166,7 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         });
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) throw new Error("No audio data.");
+        if (!base64Audio) throw new Error("No audio data returned from Gemini.");
 
         if (cacheKey) {
             localStorage.setItem(`${cacheKey}_${NEXA_VOICE}_${CACHE_VERSION}`, base64Audio);
@@ -143,8 +177,9 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         playAudioBuffer(audioBuffer, onStart, onEnd);
 
     } catch (error: any) {
-        console.error("TTS Error:", error);
-        onEnd();
+        console.warn("NEXA Voice Engine Failed, Switching to Backup Protocol.", error);
+        // CRITICAL FALLBACK: Use Native Browser TTS if Gemini Fails
+        playNativeTTS(text, onStart, onEnd);
     }
 };
 
@@ -157,8 +192,13 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
 };
 
 export const stop = (): void => {
+    // Stop AudioContext Sound
     if (currentSource) {
         try { currentSource.stop(); } catch (e) {}
         currentSource = null;
+    }
+    // Stop Native TTS
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
     }
 };

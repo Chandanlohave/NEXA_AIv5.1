@@ -5,9 +5,9 @@ let globalAudioCtx: AudioContext | null = null;
 
 export const getAudioContext = (): AudioContext => {
     if (!globalAudioCtx && typeof window !== 'undefined') {
-        // Create context with specific sample rate for better compatibility with Gemini TTS
+        // FIX: Removed forced sampleRate: 24000. Let browser decide native hardware rate (usually 44.1k or 48k).
+        // This prevents crashes on Android devices that don't support arbitrary context rates.
         globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ 
-            sampleRate: 24000,
             latencyHint: 'interactive'
         });
     }
@@ -24,7 +24,8 @@ export const initGlobalAudio = async () => {
     }
     
     // Play a silent buffer to fully "warm up" the audio pipeline on iOS/Android
-    const buffer = ctx.createBuffer(1, 1, 22050);
+    // Use the context's native sample rate for the buffer to ensure compatibility
+    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
