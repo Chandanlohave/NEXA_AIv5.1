@@ -3,7 +3,7 @@ import { UserProfile, UserRole } from "../types";
 import { getAudioContext } from "./audioService";
 
 const NEXA_VOICE = 'Zephyr'; 
-const CACHE_VERSION = 'v11_simple_prompt';
+const CACHE_VERSION = 'v15_hindi_script_fix';
 
 let currentSource: AudioBufferSourceNode | null = null;
 
@@ -30,12 +30,14 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
   const geminiSampleRate = 24000; 
   const numChannels = 1;
   const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, geminiSampleRate);
+  
+  const buffer = ctx.createBuffer(numChannels, dataInt16.length, geminiSampleRate);
+  
   const channelData = buffer.getChannelData(0);
-  for (let i = 0; i < frameCount; i++) {
+  for (let i = 0; i < dataInt16.length; i++) {
     channelData[i] = dataInt16[i] / 32768.0;
   }
+  
   return buffer;
 }
 
@@ -50,34 +52,6 @@ const playAudioBuffer = (buffer: AudioBuffer, onStart: () => void, onEnd: () => 
     onStart();
 };
 
-// Fallback: Use Browser's Native TTS if AI TTS fails
-const playNativeTTS = (text: string, onStart: () => void, onEnd: () => void) => {
-    if (!('speechSynthesis' in window)) {
-        onEnd();
-        return;
-    }
-    
-    // Stop any current speech
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.1;
-    
-    // Try to find a good English/Hindi voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => v.name.includes('Google') && v.lang.includes('en')) || 
-                           voices.find(v => v.lang.includes('en-IN')) ||
-                           voices[0];
-    if (preferredVoice) utterance.voice = preferredVoice;
-
-    utterance.onstart = onStart;
-    utterance.onend = onEnd;
-    utterance.onerror = onEnd;
-
-    window.speechSynthesis.speak(utterance);
-};
-
 const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, onStart: () => void, onEnd: () => void) => {
     stop();
     
@@ -86,7 +60,6 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         try { await ctx.resume(); } catch (e) { console.error("TTS Resume Error", e); }
     }
 
-    // Cache Check
     if (cacheKey) {
         const fullKey = `${cacheKey}_${NEXA_VOICE}_${CACHE_VERSION}`;
         const cachedAudio = localStorage.getItem(fullKey);
@@ -104,17 +77,18 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
         
-        // --- SIMPLIFIED PRONUNCIATION ---
-        // We do strictly text replacement. No complex instructions to avoiding safety filters.
+        // --- PRONUNCIATION FIXES ---
+        // CRITICAL UPDATE: Using direct Hindi Devanagari script for the surname.
+        // This forces the model to pronounce it exactly as "लोहवे"
         let pronunciationText = text
-            .replace(/Lohave/gi, "Loh-Havay") // Phonetic spelling for TTS
-            .replace(/Chandan/gi, "Chun-dun")
+            .replace(/Lohave/gi, "लोहवे") 
+            .replace(/Chandan/gi, "Chandan")
             .replace(/NEXA/g, "Nexa");
 
-        // Simple prompt: Just read the text.
-        // Complex persona instructions here cause the model to flag content and fail.
-        // The text generation step already handles the "Naughty/Professional" wording.
-        const ttsPrompt = `Say the following text clearly in a natural Indian accent: "${pronunciationText}"`;
+        const ttsPrompt = `Read this text clearly. 
+        Use a natural Indian English accent.
+        IMPORTANT: Pronounce "लोहवे" exactly as written in Hindi.
+        Text: "${pronunciationText}"`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
@@ -127,8 +101,7 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         
-        // If we get here but no audio, throw specific error
-        if (!base64Audio) throw new Error("API returned success but no audio data.");
+        if (!base64Audio) throw new Error("No audio data.");
 
         if (cacheKey) {
             localStorage.setItem(`${cacheKey}_${NEXA_VOICE}_${CACHE_VERSION}`, base64Audio);
@@ -139,11 +112,8 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         playAudioBuffer(audioBuffer, onStart, onEnd);
 
     } catch (error: any) {
-        console.warn("Gemini TTS Failed. Error details:", error);
-        
-        // If it's a safety rating issue, we might want to know, but for now, fallback.
-        // Fallback to robotic voice ONLY if Gemini fails completely.
-        playNativeTTS(text, onStart, onEnd);
+        console.warn("TTS Failed:", error);
+        onEnd();
     }
 };
 
@@ -159,8 +129,5 @@ export const stop = (): void => {
     if (currentSource) {
         try { currentSource.stop(); } catch (e) {}
         currentSource = null;
-    }
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
     }
 };

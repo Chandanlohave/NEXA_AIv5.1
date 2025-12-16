@@ -138,15 +138,11 @@ const App: React.FC = () => {
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
   const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1, micRotationSpeed: 1, theme: 'system' });
   
-  // States for Panels
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isStudyHubOpen, setIsStudyHubOpen] = useState(false);
   const [isManageAccountsModalOpen, setIsManageAccountsModalOpen] = useState(false);
 
-  // SESSION LOCK STATE: 
-  // True = Show Auth/PowerUp screen (even if user exists). 
-  // False = Show Main Dashboard.
   const [isSessionLocked, setIsSessionLocked] = useState(true);
 
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmationWord?: string, confirmLabel?: string, cancelLabel?: string, variant?: 'red' | 'cyan'}>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
@@ -162,8 +158,6 @@ const App: React.FC = () => {
         setUser(parsedUser);
         const loadedMessages = getLocalMessages(parsedUser);
         setMessages(loadedMessages);
-        
-        // Ensure session is locked on refresh to force "Resume" interaction
         setIsSessionLocked(true); 
     }
     
@@ -174,7 +168,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Resume Session: Unlocks the screen and plays intro
   const handleResumeSession = () => {
       setIsSessionLocked(false);
       if (user) {
@@ -236,7 +229,7 @@ const App: React.FC = () => {
     }
   }, [user]);
 
-  const speakText = useCallback((text: string, warningState: boolean = false, onAudioStart?: () => void) => {
+  const speakText = useCallback((text: string, warningState: boolean = false, onAudioStart?: () => void, onAudioEnd?: () => void) => {
     if (!text || !user) {
         setHudState(isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE);
         isProcessingRef.current = false;
@@ -253,6 +246,7 @@ const App: React.FC = () => {
         () => {
             isProcessingRef.current = false;
             setHudState(warningState ? HUDState.WARNING : (isStudyHubOpen ? HUDState.STUDY_HUB : HUDState.IDLE));
+            if (onAudioEnd) onAudioEnd();
         }
     );
   }, [isStudyHubOpen, user]);
@@ -298,12 +292,9 @@ const App: React.FC = () => {
     setUser(profile);
     localStorage.setItem('nexa_user', JSON.stringify(profile));
     
-    // Load local messages
     const loadedMessages = getLocalMessages(profile);
     setMessages(loadedMessages);
 
-    // If logging in freshly, Audio Context is already unlocked by the Auth interaction.
-    // Unlock session immediately.
     setIsSessionLocked(false);
 
     if (profile.role === UserRole.ADMIN || loadedMessages.length === 0) {
@@ -367,23 +358,47 @@ const App: React.FC = () => {
     setHudState(HUDState.THINKING);
     const startTime = Date.now();
     try {
-        const responseText = await generateTextResponse(text, user);
+        const rawResponse = await generateTextResponse(text, user);
         setLatency(Date.now() - startTime);
 
-        // --- SECURITY LEVEL 8 CHECK ---
-        const isWarning = responseText.includes("[[STATE:WARNING]]");
-        const cleanText = responseText.replace(/\[\[STATE:WARNING\]\]/g, "").trim();
+        // --- TAG PROCESSING ---
+        let cleanText = rawResponse;
+        let isWarning = false;
+        let shouldLockout = false;
 
-        if (isWarning) {
-            playErrorSound(); // Alert sound
-            logAdminNotification(`SECURITY ALERT: User '${user.name}' (${user.mobile}) attempted to insult Creator. Input: "${text}"`);
+        // 1. Check for WARNING tag (Red Glow)
+        if (rawResponse.includes("[[STATE:WARNING]]")) {
+            isWarning = true;
+            cleanText = cleanText.replace(/\[\[STATE:WARNING\]\]/g, "");
+            playErrorSound(); 
         }
-        
+
+        // 2. Check for REPORT tag (Save to Admin Log)
+        const reportMatch = rawResponse.match(/\[\[REPORT:(.*?)\]\]/);
+        if (reportMatch && reportMatch[1]) {
+            logAdminNotification(reportMatch[1]);
+            cleanText = cleanText.replace(/\[\[REPORT:.*?\]\]/g, "");
+        }
+
+        // 3. Check for LOCKOUT tag (Terminate Session)
+        if (rawResponse.includes("[[ACTION:LOCKOUT]]")) {
+            shouldLockout = true;
+            cleanText = cleanText.replace(/\[\[ACTION:LOCKOUT\]\]/g, "");
+        }
+
+        cleanText = cleanText.trim();
+
         const modelMsg: ChatMessage = { role: 'model', text: cleanText, timestamp: Date.now(), isAngry: isWarning };
         setMessages(prev => [...prev, modelMsg]);
         await appendMessageToMemory(user, modelMsg);
         
-        speakText(cleanText, isWarning);
+        // Pass callback to logout AFTER speaking if lockout is active
+        speakText(cleanText, isWarning, undefined, () => {
+            if (shouldLockout) {
+                handleLogout();
+                // Optional: You could set a "Banned" state here instead of just logout
+            }
+        });
         
     } catch (error: any) {
         setHudState(HUDState.IDLE); 
@@ -394,7 +409,6 @@ const App: React.FC = () => {
     }
   };
   
-  // RENDER AUTH SCREEN IF NOT LOGGED IN OR IF SESSION IS LOCKED
   if (!user || isSessionLocked) {
       return (
           <Auth 
@@ -407,7 +421,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden font-sans select-none transition-colors duration-500">
+    <div className={`relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden font-sans select-none transition-colors duration-500 ${hudState === HUDState.WARNING ? 'shadow-[inset_0_0_50px_rgba(255,0,0,0.5)]' : ''}`}>
       <div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div>
       
       <StatusBar 

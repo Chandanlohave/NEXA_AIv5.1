@@ -1,21 +1,24 @@
 // A self-contained service for generating UI sound effects using the Web Audio API.
 
 // SINGLETON AUDIO CONTEXT FOR THE WHOLE APP
+// This ensures SFX and TTS share the same "unlocked" state.
 let globalAudioCtx: AudioContext | null = null;
 
 export const getAudioContext = (): AudioContext => {
     if (!globalAudioCtx && typeof window !== 'undefined') {
-        // FIX: Removed forced sampleRate: 24000. Let browser decide native hardware rate (usually 44.1k or 48k).
-        // This prevents crashes on Android devices that don't support arbitrary context rates.
-        globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ 
-            latencyHint: 'interactive'
+        // Mobile browsers often need 'webkitAudioContext'
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        globalAudioCtx = new AudioContextClass({ 
+            latencyHint: 'interactive',
+            // We let the browser choose the sample rate (usually 44100 or 48000) to prevent hardware crashes
         });
     }
     return globalAudioCtx!;
 };
 
 /**
- * Crucial: Call this on the first user interaction (click/tap)
+ * CRITICAL: Call this on the first user interaction (click/tap)
+ * This "unlocks" the audio engine on mobile devices.
  */
 export const initGlobalAudio = async () => {
     const ctx = getAudioContext();
@@ -23,8 +26,8 @@ export const initGlobalAudio = async () => {
         await ctx.resume();
     }
     
-    // Play a silent buffer to fully "warm up" the audio pipeline on iOS/Android
-    // Use the context's native sample rate for the buffer to ensure compatibility
+    // Play a silent buffer. This tricks iOS/Android into thinking audio has started,
+    // keeping the channel open for the AI voice later.
     const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -32,10 +35,11 @@ export const initGlobalAudio = async () => {
     source.start(0);
 };
 
+// Helper to play sounds
 const play = (nodes: (ctx: AudioContext, time: number) => AudioNode[]) => {
     const ctx = getAudioContext();
     
-    // Ensure active
+    // Always try to resume if suspended
     if (ctx.state === 'suspended') {
         ctx.resume().catch(e => console.error("Audio resume failed", e));
     }
@@ -47,29 +51,31 @@ const play = (nodes: (ctx: AudioContext, time: number) => AudioNode[]) => {
     }
 };
 
+// --- SFX DEFINITIONS (UNCHANGED) ---
+
 export const playStartupSound = () => {
     play((ctx, now) => {
-        // Increased duration and gain for a more powerful effect
         const totalDuration = 2.0; 
         const mainGain = ctx.createGain();
         mainGain.gain.setValueAtTime(0, now);
-        mainGain.gain.linearRampToValueAtTime(0.35, now + 0.05); // Louder
+        mainGain.gain.linearRampToValueAtTime(0.35, now + 0.05);
         mainGain.gain.exponentialRampToValueAtTime(0.0001, now + totalDuration);
 
-        // Layer 1: Arc Reactor Power Hum
         const coreHum = ctx.createOscillator();
         coreHum.type = 'sawtooth';
         coreHum.frequency.setValueAtTime(50, now);
-        coreHum.frequency.exponentialRampToValueAtTime(120, now + 1.2); // Longer ramp
+        coreHum.frequency.exponentialRampToValueAtTime(120, now + 1.2);
+        
         const coreFilter = ctx.createBiquadFilter();
         coreFilter.type = 'lowpass';
         coreFilter.frequency.setValueAtTime(80, now);
         coreFilter.frequency.exponentialRampToValueAtTime(500, now + 1.2);
+        
         coreHum.connect(coreFilter);
         coreFilter.connect(mainGain);
 
-        // Layer 2: Mechanical Servo Clicks
-        for (let i = 0; i < 5; i++) { // More clicks
+        // Servo Clicks
+        for (let i = 0; i < 5; i++) {
             const clickTime = now + 0.8 + i * 0.1;
             const noise = ctx.createBufferSource();
             const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
@@ -89,7 +95,6 @@ export const playStartupSound = () => {
             noise.start(clickTime);
         }
         
-        // Layer 3: System Online Chime
         const onlineChime = ctx.createOscillator();
         onlineChime.type = 'sine';
         onlineChime.frequency.value = getNoteFrequency('A6');
@@ -139,15 +144,12 @@ export const playAdminLoginSound = () => {
             const osc = ctx.createOscillator();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(getNoteFrequency(note), now);
-            
             const oscGain = ctx.createGain();
             oscGain.gain.setValueAtTime(0, now + i * 0.08);
             oscGain.gain.linearRampToValueAtTime(1, now + i * 0.08 + 0.01);
             oscGain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.8);
-
             osc.connect(oscGain);
             oscGain.connect(gainNode);
-
             osc.start(now + i * 0.08);
             osc.stop(now + i * 0.08 + 1);
         });
@@ -161,7 +163,6 @@ export const playAdminLoginSound = () => {
         shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
         shimmer.connect(shimmerGain);
         shimmerGain.connect(gainNode);
-        
         shimmer.start(now + 0.3);
         shimmer.stop(now + 1.2);
 
@@ -206,7 +207,6 @@ export const playErrorSound = () => {
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.15, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-
         [440, 466.16].forEach(freq => { 
             const osc = ctx.createOscillator();
             osc.type = 'square';
@@ -225,11 +225,9 @@ export const playSystemNotificationSound = () => {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(600, now);
         osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
-        
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.1, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-        
         osc.connect(gain);
         osc.start(now);
         osc.stop(now + 0.3);
@@ -241,11 +239,9 @@ export const playSystemNotificationSound = () => {
         const gain2 = ctx.createGain();
         gain2.gain.setValueAtTime(0.05, now);
         gain2.gain.linearRampToValueAtTime(0, now + 0.1);
-        
         osc2.connect(gain2);
         osc2.start(now);
         osc2.stop(now + 0.1);
-
         return [gain, gain2];
     });
 };
