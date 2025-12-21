@@ -1,28 +1,21 @@
 {
-  "name": "NEXA AI Assistant",
+  "name": "NEXA HUD",
   "short_name": "NEXA",
-  "start_url": "/?source=pwa",
-  "id": "nexa-ai-pwa",
-  "scope": "/",
+  "start_url": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#000000",
   "theme_color": "#000000",
-  "description": "Futuristic AI Assistant created by Chandan Lohave",
   "orientation": "portrait",
-  "categories": ["productivity", "ai", "assistant"],
   "icons": [
     {
-      "src": "data:image/svg+xml,%3csvg width='192' height='192' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='512' height='512' rx='100' fill='black'/%3e%3cpath d='M139.636 416V96H224.909L372.364 301.091V96H416V416H330.727L183.273 210.909V416H139.636Z' fill='%2329DFFF'/%3e%3c/svg%3e",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
-      "src": "data:image/svg+xml,%3csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='512' height='512' rx='100' fill='black'/%3e%3cpath d='M139.636 416V96H224.909L372.364 301.091V96H416V416H330.727L183.273 210.909V416H139.636Z' fill='%2329DFFF'/%3e%3c/svg%3e",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }

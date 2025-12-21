@@ -1,59 +1,82 @@
-const CACHE_NAME = 'nexa-cache-v11-prod';
-const APP_SHELL_URLS = [
+const CACHE_NAME = 'nexa-pwa-v2';
+const URLS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json'
 ];
 
-// Stale-while-revalidate strategy
-const staleWhileRevalidate = async (request) => {
-  const cache = await caches.open(CACHE_NAME);
-  const cachedResponsePromise = await cache.match(request);
-
-  const networkResponsePromise = fetch(request).then(response => {
-    if (response && response.status === 200) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  }).catch(err => {
-    // Network failed, rely on cache
-  });
-
-  return cachedResponsePromise || networkResponsePromise;
-};
-
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL_URLS))
-      .then(() => self.skipWaiting())
+      .then((cache) => {
+        console.log('NEXA Core: Caching app shell.');
+        return cache.addAll(URLS_TO_CACHE);
+      })
+      .catch(err => console.error("Cache addAll failed:", err))
   );
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
+  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames
-          .filter(name => name !== CACHE_NAME)
-          .map(name => caches.delete(name))
+        cacheNames.map((cacheName) => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('NEXA Core: Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
       );
-    }).then(() => self.clients.claim())
+    })
   );
+  return self.clients.claim();
 });
 
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  if (request.method !== 'GET') return;
-
-  // Network Only for API
-  if (url.hostname.includes('googleapis.com')) {
-    event.respondWith(fetch(request));
+self.addEventListener('fetch', (event) => {
+  // We only want to cache GET requests.
+  if (event.request.method !== 'GET') {
     return;
   }
-  
-  // Stale-While-Revalidate for everything else
-  event.respondWith(staleWhileRevalidate(request));
+
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        // Cache hit - return response
+        if (response) {
+          return response;
+        }
+
+        const fetchRequest = event.request.clone();
+
+        return fetch(fetchRequest).then(
+          (response) => {
+            // Check if we received a valid response
+            if (!response || response.status !== 200) {
+              return response;
+            }
+            
+            // We don't cache non-basic responses (e.g., from third-party APIs)
+            if (response.type !== 'basic') {
+              return response;
+            }
+
+            const responseToCache = response.clone();
+
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+
+            return response;
+          }
+        ).catch(err => {
+          console.error("Fetch failed; returning offline page instead.", err);
+          // If the network fails, you could return a fallback offline page
+          // For a SPA, returning the root is often the best strategy.
+          return caches.match('/');
+        });
+      })
+  );
 });
