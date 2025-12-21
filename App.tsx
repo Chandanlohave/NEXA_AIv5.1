@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
 import ChatPanel from './components/ChatPanel';
@@ -7,14 +7,27 @@ import UserSettingsPanel from './components/UserSettingsPanel';
 import StudyHubPanel from './components/StudyHubPanel';
 import InstallPWAButton from './components/InstallPWAButton';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
-import { generateTextResponse, generateIntroductoryMessage } from './services/geminiService';
+import { generateTextResponse, generateIntroductoryMessage, generateAdminBriefing } from './services/geminiService';
 import { playMicOnSound, playErrorSound, playSystemNotificationSound } from './services/audioService';
-import { appendMessageToMemory, clearAllMemory, getLocalMessages } from './services/memoryService';
+import { appendMessageToMemory, clearAllMemory, getLocalMessages, getAdminNotifications, clearAdminNotifications } from './services/memoryService';
 import { speak as speakTextTTS, stop as stopTextTTS, speakIntro as speakIntroTTS } from './services/ttsService';
 
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+  interface SpeechRecognitionEvent extends Event {
+    results: any;
+  }
+  interface SpeechRecognitionErrorEvent extends Event {
+    error: string;
+  }
+}
+
 // --- ICONS ---
-const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
-const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
+const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-red/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
+const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-red/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 const StudyIcon = () => ( <svg className="w-5 h-5 text-nexa-blue/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg> );
 
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
@@ -47,7 +60,7 @@ const StatusBar = ({ userName, onLogout, onSettings, latency, onStudyHub }: any)
     </div>
 );
 
-const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1 }: any) => {
+const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, onToggleKeyboard, isKeyboardOpen }: any) => {
     const isListening = hudState === HUDState.LISTENING;
     const isWarning = hudState === HUDState.WARNING;
     const isProtect = hudState === HUDState.PROTECT;
@@ -78,7 +91,24 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1 }: any)
 
     return (
         <div className="w-full h-24 shrink-0 bg-gradient-to-t from-zinc-100 via-zinc-100/80 to-transparent dark:from-black dark:via-black/80 dark:to-transparent z-40 relative flex items-center justify-center">
-            <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4"><div className="w-full h-full flex justify-between items-center"><div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div><div className="w-24 flex-shrink-0"></div><div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div></div></div>
+            {/* Supply Lines & Diamond Trigger */}
+            <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4 pointer-events-none">
+                <div className="w-full h-full flex justify-between items-center relative">
+                    <div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div>
+                    
+                    <div className="w-24 flex-shrink-0"></div>
+
+                    <div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40 relative">
+                        <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-auto">
+                           <button 
+                                onClick={onToggleKeyboard}
+                                className={`w-4 h-4 rotate-45 border ${isKeyboardOpen ? 'bg-nexa-cyan border-nexa-cyan shadow-[0_0_10px_rgba(41,223,255,0.8)]' : 'bg-black border-nexa-cyan/50 hover:border-nexa-cyan hover:shadow-[0_0_8px_rgba(41,223,255,0.5)]'} transition-all duration-300`}
+                            ></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''}`}>
                 <div className="absolute inset-0 rounded-full bg-white dark:bg-black shadow-inner"></div>
                 <div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}><div className="scale-[1.4]"><MicIcon rotationDuration={finalDuration} /></div></div>
@@ -87,7 +117,7 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1 }: any)
     );
 };
 
-const KeyboardInput = ({ onSend, disabled, variant = 'cyan' }: any) => {
+const KeyboardInput = ({ onSend, disabled, variant = 'cyan', isVisible }: any) => {
   const [text, setText] = useState('');
   const borderColor = variant === 'red' ? 'border-red-500/30 focus:border-red-500' : 'border-nexa-cyan/30 focus:border-nexa-cyan';
   const textColor = variant === 'red' ? 'text-red-500 placeholder-red-500/30' : 'text-nexa-cyan placeholder-nexa-cyan/30';
@@ -100,6 +130,8 @@ const KeyboardInput = ({ onSend, disabled, variant = 'cyan' }: any) => {
     onSend(text);
     setText('');
   };
+
+  if (!isVisible) return null;
 
   return (
     <form onSubmit={handleSubmit} className="w-full px-6 pb-2 z-50 relative shrink-0 animate-slide-up">
@@ -137,6 +169,11 @@ const App: React.FC = () => {
   const [isProtocolXSettingVisible, setIsProtocolXSettingVisible] = useState(false);
   const [isProtocolXManuallyActive, setIsProtocolXManuallyActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [visualEffect, setVisualEffect] = useState<'none' | 'glitch' | 'alert'>('none');
+  const recognitionRef = useRef<any>(null);
+  const introPlayedRef = useRef<boolean>(false);
 
   const getIdleState = useCallback(() => {
     const hour = new Date().getHours();
@@ -145,6 +182,79 @@ const App: React.FC = () => {
     }
     return HUDState.IDLE;
   }, [user, isProtocolXManuallyActive]);
+
+  const handleLogout = useCallback(() => {
+    stopTextTTS();
+    setUser(null);
+    localStorage.removeItem('nexa_user');
+    setMessages([]);
+    setIsSessionLocked(true);
+    introPlayedRef.current = false; // Reset on logout
+  }, []);
+
+  const processInput = useCallback(async (text: string) => {
+    if (!user || isProcessing) return;
+    setIsProcessing(true);
+    const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    await appendMessageToMemory(user, userMsg);
+    setHudState(HUDState.THINKING);
+    setVisualEffect('none');
+    const startTime = Date.now();
+
+    try {
+        const rawResponse = await generateTextResponse(text, user, isProtocolXManuallyActive);
+        setLatency(Date.now() - startTime);
+
+        let finalState = getIdleState();
+        let shouldLockout = false;
+
+        if (rawResponse.includes("[[STATE:LATE_NIGHT]]")) finalState = HUDState.LATE_NIGHT;
+        else if (rawResponse.includes("[[STATE:WARNING]]")) { finalState = HUDState.WARNING; playErrorSound(); } 
+        else if (rawResponse.includes("[[STATE:PROTECT]]")) { finalState = HUDState.PROTECT; playSystemNotificationSound(); }
+        
+        if (rawResponse.includes("[[VISUAL:GLITCH]]")) setVisualEffect('glitch');
+        else if (rawResponse.includes("[[VISUAL:ALERT]]")) setVisualEffect('alert');
+        
+        if (rawResponse.includes("[[ACTION:LOCKOUT]]")) shouldLockout = true;
+
+        const cleanText = rawResponse
+            .replace(/\(.*?\)|\*.*?\*/g, '')
+            .replace(/\[\[.*?\]\]/g, '')
+            .replace(/\s\s+/g, ' ')
+            .trim();
+        
+        if (!cleanText) {
+            setHudState(finalState);
+            if (shouldLockout) handleLogout();
+            else setTimeout(() => {
+                setHudState(getIdleState());
+                setVisualEffect('none');
+            }, 1500);
+            setIsProcessing(false);
+            return;
+        }
+        
+        const modelMsg: ChatMessage = { role: 'model', text: cleanText, timestamp: Date.now(), isAngry: finalState === HUDState.WARNING || finalState === HUDState.PROTECT };
+        await appendMessageToMemory(user, modelMsg);
+        
+        speakTextTTS(user, cleanText, 
+            () => { setMessages(prev => [...prev, modelMsg]); setHudState(HUDState.SPEAKING); },
+            () => { 
+                setHudState(getIdleState());
+                setVisualEffect('none');
+                if (shouldLockout) handleLogout();
+                setIsProcessing(false);
+            }
+        );
+    } catch (error: any) { 
+        console.error("Input processing error:", error);
+        setHudState(getIdleState());
+        setVisualEffect('none');
+        playErrorSound();
+        setIsProcessing(false);
+    }
+  }, [user, isProcessing, getIdleState, isProtocolXManuallyActive, handleLogout]);
 
   useEffect(() => {
     if (hudState === HUDState.WARNING || hudState === HUDState.PROTECT) {
@@ -185,63 +295,113 @@ const App: React.FC = () => {
     const savedConfig = localStorage.getItem('nexa_config');
     if (savedConfig) setConfig(prev => ({ ...prev, ...JSON.parse(savedConfig) }));
   }, []);
+  
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Speech Recognition not supported by this browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      stopTextTTS();
+      setHudState(HUDState.LISTENING);
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = event.results[event.results.length - 1][0].transcript.trim();
+      if (transcript) {
+        processInput(transcript);
+      }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error', event.error);
+      if (event.error !== 'no-speech') {
+          playErrorSound();
+      }
+      setHudState(getIdleState());
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setHudState(prevState => prevState === HUDState.LISTENING ? getIdleState() : prevState);
+    };
+    
+    recognitionRef.current = recognition;
+
+  }, [getIdleState, processInput]);
+
+
+  const triggerIntro = useCallback(async (currentUser: UserProfile) => {
+    if (introPlayedRef.current) return;
+    setIsProcessing(true);
+    setHudState(HUDState.THINKING);
+
+    if (currentUser.role === UserRole.ADMIN) {
+        const notifications = await getAdminNotifications();
+        if (notifications && notifications.length > 0) {
+            const briefingText = await generateAdminBriefing(notifications);
+            await clearAdminNotifications();
+            const briefingMsg: ChatMessage = { role: 'model', text: `ADMIN BRIEFING:\n${briefingText}`, timestamp: Date.now(), isIntro: true };
+            
+            await new Promise<void>(resolve => {
+                speakTextTTS(
+                    currentUser, 
+                    briefingText,
+                    () => {
+                        setMessages(prev => [...prev, briefingMsg]);
+                        setHudState(HUDState.SPEAKING);
+                    },
+                    () => {
+                        // Remove ephemeral briefing message after spoken
+                        setMessages(prev => prev.filter(m => m !== briefingMsg));
+                        resolve();
+                    }
+                );
+            });
+        }
+    }
+
+    try {
+        const introText = await generateIntroductoryMessage(currentUser);
+        if (!introText) throw new Error("Intro text generation failed");
+
+        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now(), isIntro: true };
+        
+        // FIX: Corrected function call to match the expected 4 arguments, passing introMsg.text and removing the extra null argument.
+        speakIntroTTS(
+            currentUser, 
+            introMsg.text,
+            () => { 
+                setMessages(prev => [...prev, introMsg]); 
+                setHudState(HUDState.SPEAKING); 
+            },
+            () => { 
+                setIsProcessing(false); 
+                setHudState(getIdleState());
+                introPlayedRef.current = true;
+                setTimeout(() => {
+                    setMessages(prev => prev.filter(m => !m.isIntro));
+                }, 100);
+            }
+        );
+    } catch (e) { 
+        setIsProcessing(false); 
+        setHudState(getIdleState()); 
+    }
+  }, [getIdleState]);
 
   const handleResumeSession = () => {
       setIsSessionLocked(false);
       if (user) setTimeout(() => triggerIntro(user), 500);
-  };
-
-  const processInput = async (text: string) => {
-    if (!user || isProcessing) return;
-    setIsProcessing(true);
-    const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
-    setMessages(prev => [...prev, userMsg]);
-    await appendMessageToMemory(user, userMsg);
-    setHudState(HUDState.THINKING);
-    const startTime = Date.now();
-
-    try {
-        const rawResponse = await generateTextResponse(text, user, isProtocolXManuallyActive);
-        setLatency(Date.now() - startTime);
-
-        let finalState = getIdleState();
-        let shouldLockout = false;
-
-        if (rawResponse.includes("[[STATE:LATE_NIGHT]]")) finalState = HUDState.LATE_NIGHT;
-        else if (rawResponse.includes("[[STATE:WARNING]]")) { finalState = HUDState.WARNING; playErrorSound(); } 
-        else if (rawResponse.includes("[[STATE:PROTECT]]")) { finalState = HUDState.PROTECT; playSystemNotificationSound(); }
-        if (rawResponse.includes("[[ACTION:LOCKOUT]]")) shouldLockout = true;
-
-        const cleanText = rawResponse
-            .replace(/\(.*?\)|\*.*?\*/g, '')
-            .replace(/\[\[.*?\]\]/g, '')
-            .replace(/\s\s+/g, ' ')
-            .trim();
-        
-        if (!cleanText) {
-            setHudState(finalState);
-            if (shouldLockout) handleLogout();
-            else setTimeout(() => setHudState(getIdleState()), 1500);
-            return;
-        }
-        
-        const modelMsg: ChatMessage = { role: 'model', text: cleanText, timestamp: Date.now(), isAngry: finalState === HUDState.WARNING || finalState === HUDState.PROTECT };
-        await appendMessageToMemory(user, modelMsg);
-        
-        speakTextTTS(user, cleanText, 
-            () => { setMessages(prev => [...prev, modelMsg]); setHudState(HUDState.SPEAKING); },
-            () => { 
-                setHudState(getIdleState());
-                if (shouldLockout) handleLogout(); 
-            }
-        );
-    } catch (error: any) { 
-        console.error("Input processing error:", error);
-        setHudState(getIdleState()); 
-        playErrorSound();
-    } finally {
-        setIsProcessing(false);
-    }
   };
 
   const handleLogin = (profile: UserProfile) => {
@@ -252,29 +412,21 @@ const App: React.FC = () => {
     setTimeout(() => triggerIntro(profile), 500);
   };
 
-  const handleLogout = () => {
-    stopTextTTS();
-    setUser(null);
-    localStorage.removeItem('nexa_user');
-    setMessages([]);
-    setIsSessionLocked(true);
-  };
-
-  const triggerIntro = async (currentUser: UserProfile) => {
-    setIsProcessing(true);
-    setHudState(HUDState.THINKING);
-    try {
-        const introText = await generateIntroductoryMessage(currentUser, null);
-        const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
-        speakIntroTTS(currentUser, introMsg, 'intro', 
-            () => { setMessages(prev => [...prev, introMsg]); setHudState(HUDState.SPEAKING); },
-            () => { setIsProcessing(false); setHudState(getIdleState()); }
-        );
-    } catch (e) { setIsProcessing(false); setHudState(getIdleState()); }
-  };
-
   const handleMicClick = () => {
-    playMicOnSound();
+    if (isProcessing || !recognitionRef.current) return;
+
+    if (isListening) {
+        recognitionRef.current.stop();
+    } else {
+        setIsKeyboardOpen(false); // Close keyboard if open
+        playMicOnSound();
+        try {
+            recognitionRef.current.start();
+        } catch (e) {
+            console.error("Could not start recognition", e);
+            playErrorSound();
+        }
+    }
   };
 
   const handleAdminNameClick = () => {
@@ -298,16 +450,26 @@ const App: React.FC = () => {
 
   if (!user || isSessionLocked) return <Auth onLogin={handleLogin} onResume={handleResumeSession} isResuming={!!user} savedUserName={user?.name} />;
 
+  const visualEffectClass = 
+    visualEffect === 'glitch' ? 'glitch-effect' : 
+    visualEffect === 'alert' ? 'alert-effect' : '';
+
   return (
-    <div className={`relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden transition-all duration-700`}>
+    <div className={`relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden transition-all duration-700 ${visualEffectClass}`}>
       <div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div>
       <StatusBar userName={user.name} onLogout={handleLogout} latency={latency} onSettings={() => user.role === UserRole.ADMIN ? setIsAdminPanelOpen(true) : setIsUserSettingsOpen(true)} onStudyHub={() => { setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB); }} />
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
         <div className="flex-[0.45] flex items-center justify-center min-h-[250px]"><HUD state={hudState} rotationSpeed={config.hudRotationSpeed} /></div>
         <div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div>
       </div>
-      <KeyboardInput onSend={processInput} disabled={isProcessing} variant={user.role === UserRole.ADMIN ? 'red' : 'cyan'} />
-      <ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.micRotationSpeed} />
+      <KeyboardInput onSend={processInput} disabled={isProcessing} variant={user.role === UserRole.ADMIN ? 'red' : 'cyan'} isVisible={isKeyboardOpen} />
+      <ControlDeck 
+        onMicClick={handleMicClick} 
+        hudState={hudState} 
+        rotationSpeedMultiplier={config.micRotationSpeed} 
+        onToggleKeyboard={() => setIsKeyboardOpen(!isKeyboardOpen)}
+        isKeyboardOpen={isKeyboardOpen}
+      />
       {user.role === UserRole.ADMIN ? (
         <AdminPanel 
           isOpen={isAdminPanelOpen} 

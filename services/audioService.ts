@@ -51,64 +51,96 @@ const play = (nodes: (ctx: AudioContext, time: number) => AudioNode[]) => {
     }
 };
 
-// --- SFX DEFINITIONS (UNCHANGED) ---
+// --- SFX DEFINITIONS ---
 
 export const playStartupSound = () => {
     play((ctx, now) => {
-        const totalDuration = 2.0; 
+        const totalDuration = 1.5;
         const mainGain = ctx.createGain();
         mainGain.gain.setValueAtTime(0, now);
-        mainGain.gain.linearRampToValueAtTime(0.35, now + 0.05);
+        mainGain.gain.linearRampToValueAtTime(0.9, now + 0.05); // Faster, louder attack
         mainGain.gain.exponentialRampToValueAtTime(0.0001, now + totalDuration);
 
-        const coreHum = ctx.createOscillator();
-        coreHum.type = 'sawtooth';
-        coreHum.frequency.setValueAtTime(50, now);
-        coreHum.frequency.exponentialRampToValueAtTime(120, now + 1.2);
-        
-        const coreFilter = ctx.createBiquadFilter();
-        coreFilter.type = 'lowpass';
-        coreFilter.frequency.setValueAtTime(80, now);
-        coreFilter.frequency.exponentialRampToValueAtTime(500, now + 1.2);
-        
-        coreHum.connect(coreFilter);
-        coreFilter.connect(mainGain);
+        // 1. Low-end punch
+        const punchOsc = ctx.createOscillator();
+        punchOsc.type = 'sine';
+        punchOsc.frequency.setValueAtTime(120, now);
+        punchOsc.frequency.exponentialRampToValueAtTime(30, now + 0.2);
+        const punchGain = ctx.createGain();
+        punchGain.gain.setValueAtTime(1.0, now);
+        punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        punchOsc.connect(punchGain);
+        punchGain.connect(mainGain);
 
-        // Servo Clicks
-        for (let i = 0; i < 5; i++) {
-            const clickTime = now + 0.8 + i * 0.1;
-            const noise = ctx.createBufferSource();
-            const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let j = 0; j < data.length; j++) { data[j] = Math.random() * 2 - 1; }
-            noise.buffer = buffer;
-            const noiseFilter = ctx.createBiquadFilter();
-            noiseFilter.type = 'bandpass';
-            noiseFilter.frequency.value = 3000 + i * 500;
-            noiseFilter.Q.value = 20;
-            const noiseGain = ctx.createGain();
-            noiseGain.gain.setValueAtTime(0.3, clickTime);
-            noiseGain.gain.exponentialRampToValueAtTime(0.0001, clickTime + 0.05);
-            noise.connect(noiseFilter);
-            noiseFilter.connect(noiseGain);
-            noiseGain.connect(mainGain);
-            noise.start(clickTime);
-        }
+        // 2. High-energy riser
+        const riserOsc = ctx.createOscillator();
+        riserOsc.type = 'sawtooth';
+        riserOsc.frequency.setValueAtTime(200, now);
+        riserOsc.frequency.exponentialRampToValueAtTime(6000, now + 0.5); // Very fast rise
+        const riserGain = ctx.createGain();
+        riserGain.gain.setValueAtTime(0, now);
+        riserGain.gain.linearRampToValueAtTime(0.3, now + 0.1);
+        riserGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        riserOsc.connect(riserGain);
+        riserGain.connect(mainGain);
+
+        // 3. Impact/Clang at 0.5s
+        const impactTime = now + 0.5;
         
-        const onlineChime = ctx.createOscillator();
-        onlineChime.type = 'sine';
-        onlineChime.frequency.value = getNoteFrequency('A6');
-        const chimeGain = ctx.createGain();
-        chimeGain.gain.setValueAtTime(0, now + 1.5);
-        chimeGain.gain.linearRampToValueAtTime(0.2, now + 1.51);
-        chimeGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.9);
-        onlineChime.connect(chimeGain);
-        chimeGain.connect(mainGain);
+        // White noise burst
+        const noise = ctx.createBufferSource();
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) { data[i] = Math.random() * 2 - 1; }
+        noise.buffer = buffer;
         
-        coreHum.start(now);
-        coreHum.stop(now + 1.3);
-        onlineChime.start(now + 1.5);
-        onlineChime.stop(now + 1.9);
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = 3000;
+        noiseFilter.Q.value = 10;
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.8, impactTime);
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, impactTime + 0.2);
+        
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(mainGain);
+
+        // Metallic clang using FM synthesis
+        const carrier = ctx.createOscillator();
+        carrier.type = 'sine';
+        carrier.frequency.setValueAtTime(600, impactTime);
+        carrier.frequency.exponentialRampToValueAtTime(100, impactTime + 0.6);
+
+        const modulator = ctx.createOscillator();
+        modulator.type = 'square';
+        modulator.frequency.setValueAtTime(900, impactTime);
+        modulator.frequency.exponentialRampToValueAtTime(150, impactTime + 0.6);
+        
+        const modulatorGain = ctx.createGain();
+        modulatorGain.gain.setValueAtTime(800, impactTime); // Modulation depth
+        modulatorGain.gain.exponentialRampToValueAtTime(1, impactTime + 0.6);
+
+        const clangGain = ctx.createGain();
+        clangGain.gain.setValueAtTime(0, impactTime);
+        clangGain.gain.linearRampToValueAtTime(0.6, impactTime + 0.02);
+        clangGain.gain.exponentialRampToValueAtTime(0.0001, impactTime + 0.8);
+        
+        modulator.connect(modulatorGain);
+        modulatorGain.connect(carrier.frequency); // FM
+        carrier.connect(clangGain);
+        clangGain.connect(mainGain);
+
+        punchOsc.start(now);
+        punchOsc.stop(now + 0.4);
+        riserOsc.start(now);
+        riserOsc.stop(now + 0.5);
+        noise.start(impactTime);
+        carrier.start(impactTime);
+        carrier.stop(impactTime + 0.8);
+        modulator.start(impactTime);
+        modulator.stop(impactTime + 0.8);
 
         return [mainGain];
     });

@@ -89,5 +89,5 @@ export const logAdminNotification = (note: string) => {
 }
 
 export const clearAdminNotifications = (): void => {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, '[]');
+    localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
 };

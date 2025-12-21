@@ -2,6 +2,7 @@
   "name": "NEXA AI Assistant 5.0",
   "description": "Futuristic JARVIS-style AI Assistant with advanced personality engine, voice interaction, and mobile-first design.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }

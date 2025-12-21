@@ -60,10 +60,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
     <div className="w-full max-w-3xl h-full flex flex-col bg-white/50 dark:bg-black/40 border border-zinc-200 dark:border-nexa-cyan/20 rounded-lg backdrop-blur-md overflow-hidden relative">
       <div className="w-full h-6 bg-zinc-100/80 dark:bg-nexa-cyan/5 border-b border-zinc-200 dark:border-nexa-cyan/20 flex items-center justify-between px-3">
          <div className="text-[9px] text-zinc-500 dark:text-nexa-cyan/70 font-mono tracking-widest uppercase flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-zinc-400 dark:bg-nexa-cyan/70 rounded-full animate-pulse"></span>
+            <span className="w-1.5 h-1.5 bg-nexa-red rounded-full animate-pulse"></span>
             /// CONVERSATION_LOG ///
          </div>
-         <div className="text-[8px] text-zinc-400 dark:text-nexa-cyan/30 font-mono">LIVE_FEED</div>
+         <div className="text-[8px] text-nexa-red/70 font-mono">LIVE_FEED</div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scroll-smooth no-scrollbar">

@@ -202,9 +202,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       
-      <div className="absolute top-8 text-center animate-fade-in z-50">
+      <div className="absolute top-24 text-center animate-fade-in z-50">
           <div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em] uppercase">{isResuming ? 'Biometric Link Ready' : 'Project NEXA'}</div>
-          <div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.3em] uppercase">{isResuming ? savedUserName : 'Initial Boot'}</div>
+          {isResuming ? (
+              <div className="text-5xl font-black text-zinc-800 dark:text-white tracking-[0.4em] uppercase drop-shadow-[0_0_15px_rgba(41,223,255,0.2)] dark:drop-shadow-[0_0_15px_rgba(41,223,255,0.4)] mt-2">{savedUserName}</div>
+          ) : (
+              <div className="text-xl font-bold text-zinc-700 dark:text-white tracking-[0.1em] uppercase mt-3">A CREATION BY <span className="text-nexa-cyan">CHANDAN LOHAVE</span></div>
+          )}
       </div>
       
       {mode === 'INIT' && (
@@ -220,17 +224,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
       <div className="relative w-full max-w-sm z-50">
         <div className={`absolute -top-6 -left-6 w-12 h-12 border-t border-l ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500 group-hover:w-16 group-hover:h-16`}></div><div className={`absolute -top-6 -right-6 w-12 h-12 border-t border-r ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500`}></div><div className={`absolute -bottom-6 -left-6 w-12 h-12 border-b border-l ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500`}></div><div className={`absolute -bottom-6 -right-6 w-12 h-12 border-b border-r ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500`}></div>
         
-        <div className={`backdrop-blur-xl border p-8 relative transition-all duration-700 ${mode === 'ADMIN' ? 'bg-red-950/20 border-red-500/30 shadow-[0_0_50px_rgba(255,42,42,0.15)]' : 'bg-white/40 dark:bg-black/40 border-zinc-200/50 dark:border-nexa-cyan/20 shadow-[0_0_50px_rgba(41,223,255,0.15)]'} rounded-sm`}>
+        <div className={`backdrop-blur-xl border p-6 relative transition-all duration-700 ${mode === 'ADMIN' ? 'bg-red-950/20 border-red-500/30 shadow-[0_0_50px_rgba(255,42,42,0.15)]' : 'bg-white/40 dark:bg-black/40 border-zinc-200/50 dark:border-nexa-cyan/20 shadow-[0_0_50px_rgba(41,223,255,0.15)]'} rounded-sm`}>
           {error && <div className="mb-6 p-3 bg-red-900/20 border-l-2 border-red-500 text-red-500 text-[10px] font-mono tracking-widest animate-pulse uppercase">{error}</div>}
           
           {mode === 'INIT' && (
-            <div className="flex flex-col justify-center items-center pt-4 pb-2 animate-fade-in relative" style={{ minHeight: '340px' }}>
-              <div onClick={handlePowerUpClick} className="relative w-44 h-44 flex items-center justify-center cursor-pointer group">
-                  <div className={`absolute inset-0 rounded-full border border-dashed ${loading ? 'border-nexa-cyan animate-spin' : 'border-nexa-cyan/30'} transition-all duration-500`}></div>
-                  <div className={`absolute inset-4 rounded-full border ${loading ? 'border-nexa-cyan/60 animate-spin-reverse-slow' : 'border-nexa-cyan/10'} transition-all duration-700`}></div>
+            <div className="flex flex-col justify-center items-center pt-4 pb-2 animate-fade-in relative" style={{ minHeight: '320px' }}>
+              <div onClick={handlePowerUpClick} className="relative w-40 h-40 flex items-center justify-center cursor-pointer group">
+                  <div className={`absolute inset-0 rounded-full border border-dashed border-nexa-cyan/30 animate-spin`} style={{animationDuration: '12s'}}></div>
+                  <div className={`absolute inset-4 rounded-full border border-nexa-cyan/10 animate-spin-reverse-slow`} style={{animationDuration: '20s'}}></div>
                   
-                  <div className={`w-28 h-28 rounded-full bg-nexa-cyan/5 backdrop-blur-md flex flex-col items-center justify-center border border-nexa-cyan/40 shadow-[0_0_30px_rgba(41,223,255,0.2)] group-hover:shadow-[0_0_50px_rgba(41,223,255,0.4)] group-active:scale-95 transition-all duration-500`}>
-                      <div className="text-4xl font-black text-nexa-cyan tracking-tighter italic">NX</div>
+                  <div className={`w-24 h-24 rounded-full bg-nexa-cyan/5 backdrop-blur-md flex flex-col items-center justify-center border border-nexa-cyan/40 shadow-[0_0_30px_rgba(41,223,255,0.2)] group-hover:shadow-[0_0_50px_rgba(41,223,255,0.4)] group-active:scale-95 transition-all duration-500`}>
+                      <div className="text-4xl font-black text-nexa-cyan tracking-tighter drop-shadow-[0_0_12px_theme(colors.nexa.cyan)]">NX</div>
                       <div className="text-[8px] font-mono text-nexa-cyan/60 tracking-[0.4em] mt-1 uppercase">Active</div>
                   </div>
               </div>
@@ -321,7 +325,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
         </div>
         <div className="flex justify-between mt-4 px-2 opacity-30"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono uppercase tracking-[0.2em]`}>Secured_Line</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono tracking-[0.2em]`}>NEXA_V12_LOHAVE</div></div>
       </div>
-      <div className="absolute bottom-16 text-center text-[9px] font-mono text-zinc-400 dark:text-nexa-cyan/20 tracking-[0.5em] animate-fade-in z-50 uppercase">Master Control Center</div>
+      <div className="absolute bottom-20 text-center text-[10px] font-mono font-bold text-zinc-500 dark:text-white/70 tracking-widest animate-fade-in z-50 uppercase">
+        © All Copyright Reserved By Chandan Lohave 2025
+      </div>
       <InstallPWAButton />
     </div>
   );

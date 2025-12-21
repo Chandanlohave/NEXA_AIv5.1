@@ -15,6 +15,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isAngry?: boolean;
+  isIntro?: boolean;
 }
 
 export enum HUDState {

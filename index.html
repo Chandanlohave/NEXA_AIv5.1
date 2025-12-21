@@ -130,6 +130,15 @@
       }
 
       /* Global Danger Mode Modifier */
+      .danger-mode::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(circle, transparent 40%, rgba(255, 0, 0, 0.25) 100%);
+        z-index: 51; /* Above scanlines */
+        pointer-events: none;
+        animation: dangerPulse 1s infinite;
+      }
       .danger-mode .perspective-grid {
         --grid-color: rgba(255, 42, 42, 0.3);
         animation-duration: 2s;
@@ -137,9 +146,6 @@
       .danger-mode .vignette {
         --vignette-mid: rgba(255, 0, 0, 0.2);
         --vignette-edge: rgba(100, 0, 0, 0.9);
-      }
-      .danger-mode {
-        animation: dangerPulse 2s infinite;
       }
 
       /* Holographic Vignette */
@@ -167,22 +173,48 @@
         opacity: 0.15;
       }
 
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .password-hidden { -webkit-text-security: disc; text-security: disc; }
+      [data-vercel-toolbar] { display: none !important; }
+
+      /* --- NEW VISUAL EFFECTS --- */
+      @keyframes glitch {
+        0% { transform: translate(0); }
+        20% { transform: translate(-3px, 3px); }
+        40% { transform: translate(-3px, -3px); }
+        60% { transform: translate(3px, 3px); }
+        80% { transform: translate(3px, -3px); }
+        100% { transform: translate(0); }
       }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-      
-      .password-hidden {
-        -webkit-text-security: disc;
-        text-security: disc;
+      .glitch-effect {
+        animation: glitch 0.2s steps(2, end) infinite;
       }
 
-      [data-vercel-toolbar] {
-        display: none !important;
+      @keyframes alert-blink {
+        0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.02); }
       }
+      .alert-effect::after {
+        content: 'CRITICAL ALERT';
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: clamp(2rem, 12vw, 5rem);
+        color: #ff2a2a;
+        background: rgba(255,0,0,0.05);
+        padding: 1rem 100%;
+        border: 2px solid #ff2a2a;
+        font-family: monospace;
+        font-weight: bold;
+        text-align: center;
+        text-shadow: 0 0 15px #ff2a2a;
+        z-index: 1000;
+        animation: alert-blink 0.5s infinite;
+        pointer-events: none;
+      }
+
     </style>
     <script type="importmap">
 {
