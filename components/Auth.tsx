@@ -12,27 +12,32 @@ interface AuthProps {
 }
 
 const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan', className = '' }: any) => {
-  const colorClass = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan';
-  const borderClass = variant === 'red' ? 'bg-red-500' : 'bg-nexa-cyan';
-  const placeholderClass = variant === 'red' ? 'placeholder-red-500/20' : 'placeholder-nexa-cyan/20 dark:placeholder-nexa-cyan/20';
+  const isRed = variant === 'red';
+  const colorClass = isRed ? 'text-nexa-red' : 'text-nexa-cyan';
+  const glowClass = isRed ? 'shadow-[0_0_15px_rgba(255,42,42,0.4)]' : 'shadow-[0_0_15px_rgba(41,223,255,0.4)]';
+  const borderClass = isRed ? 'bg-nexa-red' : 'bg-nexa-cyan';
+  const placeholderClass = isRed ? 'placeholder-red-900/40' : 'placeholder-zinc-400 dark:placeholder-nexa-cyan/20';
 
   return (
-    <div className="relative group z-50 my-4">
-      <div className="flex items-center">
-        <span className={`${colorClass} opacity-50 text-2xl font-light group-focus-within:opacity-100 transition-opacity duration-300`}>[</span>
-        <input
-          type={type}
-          name={name}
-          value={value}
-          onChange={onChange}
-          autoFocus={autoFocus}
-          className={`w-full bg-transparent border-none text-zinc-800 dark:text-white text-center font-mono text-base focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-widest relative z-10 ${className}`}
-          placeholder={placeholder}
-          autoComplete="off"
-        />
-        <span className={`${colorClass} opacity-50 text-2xl font-light group-focus-within:opacity-100 transition-opacity duration-300`}>]</span>
+    <div className="relative group z-50 my-6">
+      <div className="flex items-center justify-center gap-2">
+        <span className={`${colorClass} text-3xl font-extralight opacity-40 group-focus-within:opacity-100 group-focus-within:animate-pulse transition-all duration-500`}>[</span>
+        <div className="relative flex-1 max-w-[240px]">
+          <input
+            type={type}
+            name={name}
+            value={value}
+            onChange={onChange}
+            autoFocus={autoFocus}
+            className={`w-full bg-white/5 dark:bg-black/20 border-b border-transparent group-focus-within:border-${isRed ? 'red-500' : 'nexa-cyan'}/30 text-zinc-800 dark:text-white text-center font-mono text-sm focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-[0.2em] relative transition-all py-2 rounded-sm uppercase`}
+            placeholder={placeholder}
+            autoComplete="off"
+          />
+          <div className={`absolute bottom-0 left-0 h-[1px] w-0 group-focus-within:w-full ${borderClass} transition-all duration-700 opacity-50`}></div>
+        </div>
+        <span className={`${colorClass} text-3xl font-extralight opacity-40 group-focus-within:opacity-100 group-focus-within:animate-pulse transition-all duration-500`}>]</span>
       </div>
-      <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-[1px] ${borderClass} group-focus-within:w-full transition-all duration-300`}></div>
+      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-10 bg-${isRed ? 'red-500' : 'nexa-cyan'}/5 blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 -z-10`}></div>
     </div>
   );
 };
@@ -42,23 +47,24 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
     onClick={onClick}
     disabled={loading}
     className={`
-      w-full py-4 px-6 font-bold tracking-[0.2em] uppercase transition-all duration-200 z-50 cursor-pointer clip-corner relative z-20 flex items-center justify-center gap-3
+      w-full py-4 px-6 font-bold tracking-[0.3em] uppercase transition-all duration-300 z-50 cursor-pointer clip-corner relative z-20 flex items-center justify-center gap-3 group
       ${secondary 
-        ? 'bg-transparent border border-nexa-cyan/30 text-nexa-cyan/60 hover:text-black dark:hover:text-white hover:border-nexa-cyan' 
-        : 'bg-nexa-cyan text-black hover:bg-zinc-800 dark:hover:bg-white hover:shadow-[0_0_20px_rgba(41,223,255,0.6)]'
+        ? 'bg-transparent border border-nexa-cyan/30 text-nexa-cyan/60 hover:text-white hover:border-nexa-cyan' 
+        : 'bg-nexa-cyan text-black hover:bg-white hover:shadow-[0_0_25px_rgba(41,223,255,0.8)] active:scale-95'
       }
     `}
-    style={{ clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)' }}
+    style={{ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }}
   >
     {loading ? (
-      <span className="flex items-center justify-center gap-2">
-         <span className="w-2 h-2 bg-black dark:bg-white rounded-full animate-bounce"></span>
-         PROCESSING
+      <span className="flex items-center justify-center gap-3">
+         <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+         <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+         <span className="w-2 h-2 bg-black rounded-full animate-bounce"></span>
       </span>
     ) : (
       <>
-        {icon && <span className="w-5 h-5">{icon}</span>}
-        {label}
+        {icon && <span className="w-5 h-5 group-hover:scale-110 transition-transform">{icon}</span>}
+        <span className="relative z-10">{label}</span>
       </>
     )}
   </button>
@@ -82,7 +88,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
   const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP TO CONNECT');
 
-  // Check env variable injected by vite define
   const hasSystemKey = (!!process.env.API_KEY && process.env.API_KEY !== 'undefined' && process.env.API_KEY !== '');
   const hasCustomKey = !!localStorage.getItem('nexa_client_api_key');
 
@@ -198,48 +203,40 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       
       <div className="absolute top-8 text-center animate-fade-in z-50">
-          <div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em]">{isResuming ? 'WELCOME BACK' : 'CREATED BY'}</div>
-          <div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.2em]">{isResuming ? savedUserName?.toUpperCase() : 'CHANDAN LOHAVE'}</div>
+          <div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em] uppercase">{isResuming ? 'Biometric Link Ready' : 'Project NEXA'}</div>
+          <div className="text-xl font-bold text-zinc-800 dark:text-white tracking-[0.3em] uppercase">{isResuming ? savedUserName : 'Initial Boot'}</div>
       </div>
       
       {mode === 'INIT' && (
-          <button onClick={() => setMode('KEY_INPUT')} className="absolute top-6 right-6 p-2 text-nexa-cyan/50 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/30 transition-all z-[70] group">
+          <button onClick={() => setMode('KEY_INPUT')} className="absolute top-6 right-6 p-3 text-nexa-cyan/50 hover:text-nexa-cyan border border-nexa-cyan/10 hover:border-nexa-cyan/50 rounded-full bg-nexa-cyan/5 backdrop-blur-md transition-all z-[70] group">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
-              <span className="absolute right-8 top-2 text-[9px] font-mono tracking-widest opacity-0 group-hover:opacity-100 whitespace-nowrap bg-black px-2 py-1 border border-nexa-cyan/30">
-                  {hasCustomKey ? 'CUSTOM KEY ACTIVE' : 'USE OWN API KEY'}
+              <span className="absolute right-12 top-2 text-[9px] font-mono tracking-widest opacity-0 group-hover:opacity-100 whitespace-nowrap bg-black/90 px-3 py-1.5 border border-nexa-cyan/30 rounded text-nexa-cyan shadow-xl transition-opacity">
+                  {hasCustomKey ? 'OVERRIDE_ACTIVE' : 'CONFIGURE_PRIVATE_KEY'}
               </span>
               {hasCustomKey && <div className="absolute top-1 right-1 w-2 h-2 bg-nexa-cyan rounded-full animate-pulse"></div>}
           </button>
       )}
 
-      {/* MISSING KEY WARNING - Improved Visibility */}
-      {mode === 'INIT' && !hasSystemKey && !hasCustomKey && (
-          <div className="absolute top-24 max-w-xs text-center bg-red-500/10 border border-red-500/50 px-4 py-3 rounded text-[10px] text-red-500 font-mono animate-pulse z-[70] shadow-[0_0_20px_rgba(220,38,38,0.2)]">
-              ⚠️ HOST API KEY MISSING<br/>
-              <span className="opacity-70">App will be offline. Set VITE_API_KEY in Vercel.</span>
-          </div>
-      )}
-
       <div className="relative w-full max-w-sm z-50">
-        <div className={`absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div>
+        <div className={`absolute -top-6 -left-6 w-12 h-12 border-t border-l ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500 group-hover:w-16 group-hover:h-16`}></div><div className={`absolute -top-6 -right-6 w-12 h-12 border-t border-r ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500`}></div><div className={`absolute -bottom-6 -left-6 w-12 h-12 border-b border-l ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500`}></div><div className={`absolute -bottom-6 -right-6 w-12 h-12 border-b border-r ${mode === 'ADMIN' ? 'border-red-500' : 'border-nexa-cyan'} opacity-40 transition-all duration-500`}></div>
         
-        <div className={`backdrop-blur-md border p-6 relative transition-all duration-500 ${mode === 'ADMIN' ? 'bg-red-900/10 border-red-500/20' : 'bg-white/60 dark:bg-black/60 border-zinc-200 dark:border-nexa-cyan/10'}`}>
-          {error && <div className="mb-6 p-2 bg-red-900/20 border-l-2 border-red-500 text-red-500 text-[10px] font-mono tracking-wider animate-pulse">{error}</div>}
+        <div className={`backdrop-blur-xl border p-8 relative transition-all duration-700 ${mode === 'ADMIN' ? 'bg-red-950/20 border-red-500/30 shadow-[0_0_50px_rgba(255,42,42,0.15)]' : 'bg-white/40 dark:bg-black/40 border-zinc-200/50 dark:border-nexa-cyan/20 shadow-[0_0_50px_rgba(41,223,255,0.15)]'} rounded-sm`}>
+          {error && <div className="mb-6 p-3 bg-red-900/20 border-l-2 border-red-500 text-red-500 text-[10px] font-mono tracking-widest animate-pulse uppercase">{error}</div>}
           
           {mode === 'INIT' && (
-            <div className="flex flex-col items-center py-10 animate-fade-in relative">
-              <div onClick={handlePowerUpClick} className="relative w-40 h-40 flex items-center justify-center cursor-pointer group">
-                  <div className={`absolute inset-0 rounded-full border-2 ${loading ? 'border-t-nexa-cyan border-r-nexa-cyan border-b-transparent border-l-transparent animate-spin' : 'border-nexa-cyan/30'} transition-all duration-500`}></div>
-                  <div className={`absolute inset-2 rounded-full border ${loading ? 'border-t-transparent border-r-transparent border-b-nexa-cyan border-l-nexa-cyan animate-spin-reverse-slow' : 'border-nexa-cyan/20'} transition-all duration-500`}></div>
+            <div className="flex flex-col justify-center items-center pt-4 pb-2 animate-fade-in relative" style={{ minHeight: '340px' }}>
+              <div onClick={handlePowerUpClick} className="relative w-44 h-44 flex items-center justify-center cursor-pointer group">
+                  <div className={`absolute inset-0 rounded-full border border-dashed ${loading ? 'border-nexa-cyan animate-spin' : 'border-nexa-cyan/30'} transition-all duration-500`}></div>
+                  <div className={`absolute inset-4 rounded-full border ${loading ? 'border-nexa-cyan/60 animate-spin-reverse-slow' : 'border-nexa-cyan/10'} transition-all duration-700`}></div>
                   
-                  <div className={`w-24 h-24 rounded-full bg-nexa-cyan/10 backdrop-blur-md flex items-center justify-center border border-nexa-cyan/50 shadow-[0_0_15px_rgba(41,223,255,0.3)] group-hover:shadow-[0_0_25px_rgba(41,223,255,0.6)] transition-all duration-500`}>
-                      <div className="text-3xl font-bold text-nexa-cyan tracking-wider animate-pulse">NEXA</div>
+                  <div className={`w-28 h-28 rounded-full bg-nexa-cyan/5 backdrop-blur-md flex flex-col items-center justify-center border border-nexa-cyan/40 shadow-[0_0_30px_rgba(41,223,255,0.2)] group-hover:shadow-[0_0_50px_rgba(41,223,255,0.4)] group-active:scale-95 transition-all duration-500`}>
+                      <div className="text-4xl font-black text-nexa-cyan tracking-tighter italic">NX</div>
+                      <div className="text-[8px] font-mono text-nexa-cyan/60 tracking-[0.4em] mt-1 uppercase">Active</div>
                   </div>
               </div>
-              <div className="mt-8 text-nexa-cyan/60 font-mono text-xs tracking-[0.3em] animate-pulse">
-                  {isResuming ? 'TAP TO RESUME' : initStatusText}
+              <div className="mt-10 text-nexa-cyan font-mono text-[10px] tracking-[0.5em] animate-pulse uppercase">
+                  {isResuming ? 'Verify Biometrics' : initStatusText}
               </div>
-              {hasCustomKey && <div className="mt-2 px-2 py-1 bg-nexa-cyan/10 border border-nexa-cyan/30 text-[9px] text-nexa-cyan tracking-widest font-mono">USING CUSTOM KEY</div>}
               
               {isResuming && (
                   <button 
@@ -247,67 +244,85 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                         localStorage.removeItem('nexa_user');
                         window.location.reload();
                     }}
-                    className="mt-6 text-[9px] text-zinc-500 hover:text-red-500 font-mono tracking-widest border-b border-zinc-800 hover:border-red-500 transition-colors"
+                    className="mt-8 text-[9px] text-zinc-500 hover:text-red-500 font-mono tracking-[0.3em] uppercase border-b border-zinc-300 dark:border-zinc-800 hover:border-red-500 transition-all"
                   >
-                    DIFFERENT USER?
+                    Switch Identity
                   </button>
               )}
             </div>
           )}
 
           {mode === 'USER_CREATE' && (
-            <div className="animate-slide-up space-y-3">
-              <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-6">IDENTIFY YOURSELF</div></div>
+            <div className="animate-slide-up space-y-4">
+              <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-8 tracking-[0.3em] uppercase">User Calibration</div></div>
               
-              <BracketInput name="name" placeholder="ENTER NAME" value={formData.name} onChange={handleChange} autoFocus />
-              <BracketInput name="mobile" placeholder="ENTER 10-DIGIT MOBILE" type="tel" value={formData.mobile} onChange={handleChange} />
+              <BracketInput name="name" placeholder="IDENT_NAME" value={formData.name} onChange={handleChange} autoFocus />
+              <BracketInput name="mobile" placeholder="COMMS_ID_10" type="tel" value={formData.mobile} onChange={handleChange} />
 
-              <div className="flex items-center justify-center gap-4 py-2">
-                 <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan" />
-                    <span className="text-xs font-mono text-zinc-400">MALE</span>
+              <div className="flex items-center justify-center gap-8 py-4">
+                 <label className="flex items-center gap-3 cursor-pointer group">
+                    <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan w-4 h-4" />
+                    <span className="text-[10px] font-mono text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">MALE</span>
                  </label>
-                 <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="accent-nexa-cyan" />
-                    <span className="text-xs font-mono text-zinc-400">FEMALE</span>
+                 <label className="flex items-center gap-3 cursor-pointer group">
+                    <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="accent-nexa-cyan w-4 h-4" />
+                    <span className="text-[10px] font-mono text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">FEMALE</span>
                  </label>
               </div>
 
-              <div className="pt-4">
-                  <CyberButton onClick={handleUserCreate} label="INITIALIZE PROFILE" loading={loading} />
+              <div className="pt-6">
+                  <CyberButton onClick={handleUserCreate} label="Initialize Core" loading={loading} />
               </div>
 
-              <div className="pt-4 space-y-4">
-                  <div className="flex justify-between items-center text-center mt-2 px-1">
-                      <button onClick={() => setMode('INIT')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-1 group"><span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> BACK</button>
-                      <button onClick={switchToAdmin} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">// Admin Console</button>
-                  </div>
+              <div className="pt-6 flex justify-between items-center px-1">
+                  <button onClick={() => setMode('INIT')} className="text-[10px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Cancel</button>
+                  <button onClick={switchToAdmin} className="text-[10px] text-zinc-500/40 hover:text-red-500 font-mono tracking-widest uppercase transition-colors">Admin_OS</button>
               </div>
             </div>
           )}
 
           {mode === 'KEY_INPUT' && (
             <div className="animate-slide-up space-y-4">
-               <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-2">ACCESS OVERRIDE</div></div>
-               <p className="text-zinc-400 text-[10px] text-center font-mono leading-relaxed">Enter your own Gemini API Key to use this terminal without consuming the host's quota.</p>
-               <BracketInput name="customApiKey" placeholder="AI_STUDIO_KEY" value={formData.customApiKey} onChange={handleChange} autoFocus className="password-hidden" />
-               <div className="pt-4 space-y-3">
-                   <CyberButton onClick={saveCustomKey} label="SAVE & REBOOT" loading={loading} />
-                   {hasCustomKey && <button onClick={clearCustomKey} className="w-full py-3 border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-500 text-xs font-mono tracking-widest transition-colors">REMOVE KEY & USE DEFAULT</button>}
-                   <div className="text-center mt-2">
-                       <button onClick={() => setMode('INIT')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors inline-block pt-2">CANCEL OPERATION</button>
+               <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-4 tracking-[0.3em] uppercase">Override Matrix</div></div>
+               <p className="text-zinc-500 dark:text-zinc-400 text-[10px] text-center font-mono leading-relaxed tracking-wider px-2">Link your private Google GenAI key to bypass global rate limits and ensure maximum priority.</p>
+               <BracketInput name="customApiKey" placeholder="GENAI_TOKEN_SECURE" value={formData.customApiKey} onChange={handleChange} autoFocus className="password-hidden" />
+               <div className="pt-6 space-y-4">
+                   <CyberButton onClick={saveCustomKey} label="Sync & Reboot" loading={loading} />
+                   {hasCustomKey && <button onClick={clearCustomKey} className="w-full py-3 border border-red-900/30 text-red-500/70 hover:bg-red-500/10 hover:text-red-500 text-[10px] font-mono tracking-[0.3em] uppercase transition-all rounded-sm">Purge Key Data</button>}
+                   <div className="text-center pt-2">
+                       <button onClick={() => setMode('INIT')} className="text-[10px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-all">Return to Boot</button>
                    </div>
                </div>
             </div>
           )}
 
-          {mode === 'ADMIN' && (<div className="animate-slide-up relative z-10"><div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,rgba(220,38,38,0.05)_0px,rgba(220,38,38,0.05)_10px,transparent_10px,transparent_20px)] pointer-events-none -z-10"></div><div className="text-center mb-6"><div className="inline-flex items-center gap-2 border border-red-500/50 px-3 py-1 bg-red-500/10 backdrop-blur-sm"><div className="w-2 h-2 bg-red-500 animate-pulse rounded-full"></div><span className="text-red-500 text-[10px] font-mono tracking-[0.2em] uppercase">Security Level 8</span></div></div><div className="absolute top-10 right-4 opacity-5 pointer-events-none"><svg className="w-24 h-24 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17a2 2 0 100-4 2 2 0 000 4zm6-9a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V10a2 2 0 012-2h1V6a5 5 0 0110 0v2h1zM8 6a4 4 0 018 0v2H8V6z"/></svg></div><div className="space-y-4 relative z-20"><BracketInput name="username" placeholder="IDENTITY_ID" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" className="password-hidden" /><BracketInput name="password" placeholder="ACCESS_KEY" type="text" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" /></div><div className="pt-8 space-y-4 relative z-20"><button onClick={handleAdminLogin} disabled={loading} className="w-full py-4 bg-red-600 text-white font-bold tracking-[0.2em] hover:bg-red-500 hover:shadow-[0_0_25px_rgba(220,38,38,0.8)] transition-all clip-corner relative overflow-hidden group" style={{ clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)' }}><div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><span className="relative z-10 flex items-center justify-center gap-2">{loading ? 'AUTHENTICATING...' : <>AUTHORIZE OVERRIDE <span className="text-xs opacity-70">{'>>'}</span></>}</span></button><div className="mt-2"><button onClick={() => setMode('USER_CREATE')} className="text-[9px] text-red-500/60 hover:text-red-500 font-mono tracking-widest uppercase transition-colors flex items-center justify-center gap-2 w-full group"><span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> ABORT SEQUENCE</button></div></div></div>)}
+          {mode === 'ADMIN' && (
+            <div className="animate-slide-up relative z-10">
+              <div className="text-center mb-10">
+                <div className="inline-flex items-center gap-3 border border-red-500/40 px-5 py-2 bg-red-500/5 backdrop-blur-sm rounded-sm">
+                  <div className="w-2 h-2 bg-red-500 animate-ping rounded-full"></div>
+                  <span className="text-red-500 text-[10px] font-mono tracking-[0.4em] uppercase">Root Authority</span>
+                </div>
+              </div>
+              <div className="space-y-6">
+                <BracketInput name="username" placeholder="ROOT_IDENT" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" />
+                <BracketInput name="password" placeholder="SECURE_PASS" type="text" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" />
+              </div>
+              <div className="pt-10 space-y-6">
+                <button onClick={handleAdminLogin} disabled={loading} className="w-full py-5 bg-red-600/90 text-white font-black tracking-[0.4em] hover:bg-red-500 hover:shadow-[0_0_30px_rgba(220,38,38,0.6)] transition-all clip-corner uppercase text-xs" style={{ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }}>
+                   {loading ? 'Validating...' : 'Authorize_Link'}
+                </button>
+                <button onClick={() => setMode('USER_CREATE')} className="text-[10px] text-red-500/50 hover:text-red-500 font-mono tracking-widest uppercase transition-all flex items-center justify-center gap-2 w-full group">
+                   <span className="group-hover:-translate-x-1 transition-transform">{'<<'}</span> Abort Override
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex justify-between mt-2 px-2"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>SECURE CONNECTION</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500/40' : 'text-nexa-cyan/40'} font-mono`}>V.9.0.3</div></div>
+        <div className="flex justify-between mt-4 px-2 opacity-30"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono uppercase tracking-[0.2em]`}>Secured_Line</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono tracking-[0.2em]`}>NEXA_V12_LOHAVE</div></div>
       </div>
-      <div className="absolute bottom-16 text-center text-[8px] font-mono text-zinc-400 dark:text-nexa-cyan/30 tracking-widest animate-fade-in z-50">© 2025 CHANDAN LOHAVE. ALL RIGHTS RESERVED.</div>
+      <div className="absolute bottom-16 text-center text-[9px] font-mono text-zinc-400 dark:text-nexa-cyan/20 tracking-[0.5em] animate-fade-in z-50 uppercase">Master Control Center</div>
       <InstallPWAButton />
-      <style>{`.clip-corner { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }`}</style>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { UserProfile, UserRole } from "../types";
+import { UserProfile, UserRole, ChatMessage } from "../types";
 import { getAudioContext, playErrorSound } from "./audioService";
 
 const NEXA_VOICE = 'Zephyr'; 
@@ -65,7 +65,7 @@ const playAudioBuffer = async (buffer: AudioBuffer, onStart: () => void, onEnd: 
     onStart();
 };
 
-const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, onStart: () => void, onEnd: () => void) => {
+const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, onStart: () => void, onEnd: (error?: string) => void) => {
     stop();
     
     const ctx = getAudioContext();
@@ -80,7 +80,7 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
              try {
                 const audioBytes = decodeBase64(cachedAudio);
                 const audioBuffer = await decodePcmAudioData(audioBytes, ctx);
-                playAudioBuffer(audioBuffer, onStart, onEnd);
+                playAudioBuffer(audioBuffer, onStart, () => onEnd());
                 return;
              } catch (e) { localStorage.removeItem(fullKey); }
         }
@@ -91,18 +91,17 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         const ai = new GoogleGenAI({ apiKey });
         
         let pronunciationText = text
-            .replace(/Lohave/gi, "लोहवे") 
-            .replace(/Chandan/gi, "Chandan")
-            .replace(/NEXA/g, "Nexa");
+            .replace(/Lohave/gi, "लोहवे")
+            .replace(/NEXA/g, "Nexa")
+            .trim();
 
-        const ttsPrompt = `Read this text clearly. 
-        Use a natural Indian English accent.
-        IMPORTANT: Pronounce "लोहवे" exactly as written in Hindi.
-        Text: "${pronunciationText}"`;
+        if (!pronunciationText) {
+            throw new Error("Text is empty after cleaning, cannot generate audio.");
+        }
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text: ttsPrompt }] }],
+            contents: [{ parts: [{ text: pronunciationText }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: NEXA_VOICE } } },
@@ -113,27 +112,41 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         
         if (!base64Audio) throw new Error("No audio data.");
 
-        if (cacheKey) {
-            localStorage.setItem(`${cacheKey}_${NEXA_VOICE}_${CACHE_VERSION}`, base64Audio);
+        const MAX_CACHE_SIZE_BYTES = 250 * 1024; // 250KB limit
+        if (cacheKey && base64Audio.length < MAX_CACHE_SIZE_BYTES) {
+            try {
+                const fullKey = `${cacheKey}_${NEXA_VOICE}_${CACHE_VERSION}`;
+                localStorage.setItem(fullKey, base64Audio);
+            } catch (e) {
+                console.warn("Could not cache TTS audio, storage quota may be full.", e);
+            }
         }
 
         const audioBytes = decodeBase64(base64Audio);
         const audioBuffer = await decodePcmAudioData(audioBytes, ctx);
-        playAudioBuffer(audioBuffer, onStart, onEnd);
+        playAudioBuffer(audioBuffer, onStart, () => onEnd());
 
     } catch (error: any) {
         console.error("TTS Generation Failed:", error);
         playErrorSound(); 
-        onEnd();
+        let errorType = "TTS_FAILED";
+        if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+            errorType = "TTS_QUOTA_EXCEEDED";
+        } else if (error.message === "MISSING_API_KEY") {
+            errorType = "MISSING_API_KEY";
+        }
+        onEnd(errorType);
     }
 };
 
-export const speakIntro = async (user: UserProfile, text: string, cacheKey: string, onStart: () => void, onEnd: () => void) => {
-    return generateAndPlay(user, text, cacheKey, onStart, onEnd);
+export const speakIntro = async (user: UserProfile, message: ChatMessage, cacheKey: string, onStart: () => void, onEnd: (error?: string) => void) => {
+    return generateAndPlay(user, message.text, cacheKey, onStart, onEnd);
 };
 
-export const speak = async (user: UserProfile, text: string, onStart: () => void, onEnd: () => void) => {
-    return generateAndPlay(user, text, null, onStart, onEnd);
+export const speak = async (user: UserProfile, text: string, onStart: () => void, onEnd: (error?: string) => void) => {
+    // Generate a simple cache key to reduce TTS API calls for repeated phrases.
+    const cacheKey = `tts_cache_${text.length}_${text.substring(0, 30)}`;
+    return generateAndPlay(user, text, cacheKey, onStart, onEnd);
 };
 
 export const stop = (): void => {

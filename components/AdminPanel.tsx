@@ -9,9 +9,25 @@ interface AdminPanelProps {
   onClearMemory: () => void;
   onManageAccounts: () => void;
   onViewStudyHub: () => void;
+  onAdminNameClick: () => void;
+  isProtocolXSettingVisible: boolean;
+  isProtocolXManuallyActive: boolean;
+  onProtocolXToggle: (isActive: boolean) => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConfigChange, onClearMemory, onManageAccounts, onViewStudyHub }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ 
+  isOpen, 
+  onClose, 
+  config, 
+  onConfigChange, 
+  onClearMemory, 
+  onManageAccounts, 
+  onViewStudyHub,
+  onAdminNameClick,
+  isProtocolXSettingVisible,
+  isProtocolXManuallyActive,
+  onProtocolXToggle
+}) => {
   if (!isOpen) return null;
 
   const handleExportLogs = () => {
@@ -45,7 +61,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
   return (
     <div className="absolute top-16 right-4 w-72 bg-white/80 dark:bg-black/90 border border-zinc-300 dark:border-nexa-cyan rounded-lg backdrop-blur-md p-4 z-50 shadow-[0_0_20px_rgba(41,223,255,0.3)] animate-fade-in">
       <div className="flex justify-between items-center mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        <h2 className="text-nexa-cyan font-mono text-sm tracking-wider">ADMIN CONTROL</h2>
+        <div onClick={onAdminNameClick} className="cursor-pointer group">
+          <h2 className="text-nexa-cyan font-mono text-sm tracking-wider">ADMIN CONTROL</h2>
+          <p className="text-zinc-500 text-[9px] font-mono group-hover:text-nexa-cyan transition-colors">Chandan Lohave // Level: ∞</p>
+        </div>
         <button onClick={onClose} className="text-zinc-500 hover:text-black dark:hover:text-white text-2xl leading-none">&times;</button>
       </div>
 
@@ -95,6 +114,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
           </button>
           <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Toggles HUD rotation &amp; effects.</p>
         </div>
+
+        {isProtocolXSettingVisible && (
+          <div className="pt-3 mt-2 border-t border-red-500/30 space-y-2 bg-red-900/10 p-2 animate-fade-in">
+              <label className="flex justify-between items-center text-red-400 text-xs font-mono cursor-pointer">
+                  <span>PROTOCOL X</span>
+                  <div className="relative">
+                      <input
+                          type="checkbox"
+                          checked={isProtocolXManuallyActive}
+                          onChange={(e) => onProtocolXToggle(e.target.checked)}
+                          className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                  </div>
+              </label>
+              <p className="text-red-500/60 text-[10px] font-mono text-center">
+                  Manual override for intimate personality matrix.
+              </p>
+          </div>
+        )}
 
         <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
            <button 

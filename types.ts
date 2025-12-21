@@ -5,7 +5,7 @@ export enum UserRole {
 
 export interface UserProfile {
   name: string;
-  mobile: string; // Now a mandatory unique identifier for users
+  mobile: string;
   role: UserRole;
   gender: 'male' | 'female' | 'other';
 }
@@ -22,8 +22,10 @@ export enum HUDState {
   LISTENING = 'LISTENING',
   THINKING = 'THINKING',
   SPEAKING = 'SPEAKING',
-  WARNING = 'WARNING', // Changed from ANGRY to WARNING
-  STUDY_HUB = 'STUDY HUB' // New state for Study Hub
+  WARNING = 'WARNING',
+  PROTECT = 'PROTECT',
+  STUDY_HUB = 'STUDY HUB',
+  LATE_NIGHT = 'LATE NIGHT'
 }
 
 export interface AppConfig {
@@ -36,6 +38,6 @@ export interface AppConfig {
 export interface StudyHubSubject {
   courseCode: string;
   courseName: string;
-  date: string; // YYYY-MM-DD
-  time: string; // e.g., "2-5 PM", "10 AM - 1 PM"
+  date: string;
+  time: string;
 }
