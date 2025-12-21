@@ -17,13 +17,22 @@ export const getStudyHubSchedule = (): StudyHubSubject[] => {
     ];
 };
 
-const getAiInstance = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
-    throw new Error("CORE_OFFLINE: API_KEY_MISSING");
-  }
-  return new GoogleGenAI({ apiKey });
+const getAiInstance = (user: UserProfile) => {
+    let apiKey: string | null | undefined;
+    if (user.role === UserRole.ADMIN) {
+        apiKey = process.env.API_KEY;
+        if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
+            throw new Error("CORE_OFFLINE: ADMIN_API_KEY_MISSING");
+        }
+    } else { // UserRole.USER
+        apiKey = localStorage.getItem(`nexa_client_api_key_${user.mobile}`);
+        if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
+            throw new Error("CORE_OFFLINE: CLIENT_API_KEY_MISSING");
+        }
+    }
+    return new GoogleGenAI({ apiKey });
 };
+
 
 const getGeolocation = (): Promise<{ city: string; error?: string }> => {
   return new Promise((resolve) => {
@@ -43,9 +52,9 @@ const getGeolocation = (): Promise<{ city: string; error?: string }> => {
   });
 };
 
-const generateDateTimeWeatherAnnouncement = async (city: string): Promise<string> => {
+const generateDateTimeWeatherAnnouncement = async (city: string, user: UserProfile): Promise<string> => {
     try {
-        const ai = getAiInstance();
+        const ai = getAiInstance(user);
         const now = new Date();
         const date = now.toLocaleDateString('en-CA');
         const time = now.toTimeString().substring(0, 5);
@@ -67,10 +76,10 @@ const generateDateTimeWeatherAnnouncement = async (city: string): Promise<string
     }
 };
 
-export const generateAdminBriefing = async (notifications: string[]): Promise<string> => {
+export const generateAdminBriefing = async (notifications: string[], user: UserProfile): Promise<string> => {
     if (!notifications || notifications.length === 0) return "";
     try {
-        const ai = getAiInstance();
+        const ai = getAiInstance(user);
         const prompt = `You are NEXA. Admin Chandan Lohave just logged in. 
         Brief him about these security incidents in Hinglish. 
         Tone: Loyal, alert, slightly angry at the intruders.
@@ -94,13 +103,13 @@ export const generateIntroductoryMessage = async (user: UserProfile): Promise<st
     }
 
     const { city } = await getGeolocation();
-    const announcement = await generateDateTimeWeatherAnnouncement(city);
+    const announcement = await generateDateTimeWeatherAnnouncement(city, user);
     return [fixedIntro, announcement].filter(Boolean).join('\n\n');
 };
 
 export const generateTextResponse = async (input: string, user: UserProfile, isManualProtocolX: boolean): Promise<string> => {
   try {
-    const ai = getAiInstance();
+    const ai = getAiInstance(user);
     const history = await getMemoryForPrompt(user);
     
     const hour = new Date().getHours();
@@ -137,7 +146,7 @@ export const generateTextResponse = async (input: string, user: UserProfile, isM
     return result.text;
   } catch (error: any) { 
     if (error.message.includes("CORE_OFFLINE")) {
-        return "[[STATE:WARNING]] // System error: AI Core offline. Sir, please check the API configuration link.";
+        return "[[STATE:WARNING]] // System error: AI Core offline. Please check the API key configuration.";
     }
     return `SYSTEM ERROR: ${error.message}`; 
   }

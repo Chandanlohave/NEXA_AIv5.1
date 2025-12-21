@@ -185,12 +185,16 @@ const App: React.FC = () => {
 
   const handleLogout = useCallback(() => {
     stopTextTTS();
+    const currentUser = user;
     setUser(null);
     localStorage.removeItem('nexa_user');
+    if (currentUser && currentUser.role === UserRole.USER) {
+        localStorage.removeItem(`nexa_client_api_key_${currentUser.mobile}`);
+    }
     setMessages([]);
     setIsSessionLocked(true);
     introPlayedRef.current = false; // Reset on logout
-  }, []);
+  }, [user]);
 
   const processInput = useCallback(async (text: string) => {
     if (!user || isProcessing) return;
@@ -348,7 +352,7 @@ const App: React.FC = () => {
     if (currentUser.role === UserRole.ADMIN) {
         const notifications = await getAdminNotifications();
         if (notifications && notifications.length > 0) {
-            const briefingText = await generateAdminBriefing(notifications);
+            const briefingText = await generateAdminBriefing(notifications, currentUser);
             await clearAdminNotifications();
             const briefingMsg: ChatMessage = { role: 'model', text: `ADMIN BRIEFING:\n${briefingText}`, timestamp: Date.now(), isIntro: true };
             
