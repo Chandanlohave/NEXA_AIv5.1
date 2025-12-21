@@ -29,7 +29,7 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
             value={value}
             onChange={onChange}
             autoFocus={autoFocus}
-            className={`w-full bg-white/5 dark:bg-black/20 border-b border-transparent group-focus-within:border-${isRed ? 'red-500' : 'nexa-cyan'}/30 text-zinc-800 dark:text-white text-center font-mono text-sm focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-[0.2em] relative transition-all py-2 rounded-sm uppercase`}
+            className={`w-full bg-white/5 dark:bg-black/20 border-b border-transparent group-focus-within:border-${isRed ? 'red-500' : 'nexa-cyan'}/30 text-zinc-800 dark:text-white text-center font-mono text-sm focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-[0.2em] relative transition-all py-2 rounded-sm uppercase ${className}`}
             placeholder={placeholder}
             autoComplete="off"
           />
@@ -285,7 +285,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
             <div className="animate-slide-up space-y-4">
                <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-4 tracking-[0.3em] uppercase">Override Matrix</div></div>
                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] text-center font-mono leading-relaxed tracking-wider px-2">Link your private Google GenAI key to bypass global rate limits and ensure maximum priority.</p>
-               <BracketInput name="customApiKey" placeholder="GENAI_TOKEN_SECURE" value={formData.customApiKey} onChange={handleChange} autoFocus className="password-hidden" />
+               <BracketInput name="customApiKey" placeholder="GENAI_TOKEN_SECURE" type="password" value={formData.customApiKey} onChange={handleChange} autoFocus />
                <div className="pt-6 space-y-4">
                    <CyberButton onClick={saveCustomKey} label="Sync & Reboot" loading={loading} />
                    {hasCustomKey && <button onClick={clearCustomKey} className="w-full py-3 border border-red-900/30 text-red-500/70 hover:bg-red-500/10 hover:text-red-500 text-[10px] font-mono tracking-[0.3em] uppercase transition-all rounded-sm">Purge Key Data</button>}
@@ -306,7 +306,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               </div>
               <div className="space-y-6">
                 <BracketInput name="username" placeholder="ROOT_IDENT" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" />
-                <BracketInput name="password" placeholder="SECURE_PASS" type="text" value={formData.password} onChange={handleChange} variant="red" className="password-hidden" />
+                <BracketInput name="password" placeholder="SECURE_PASS" type="password" value={formData.password} onChange={handleChange} variant="red" />
               </div>
               <div className="pt-10 space-y-6">
                 <button onClick={handleAdminLogin} disabled={loading} className="w-full py-5 bg-red-600/90 text-white font-black tracking-[0.4em] hover:bg-red-500 hover:shadow-[0_0_30px_rgba(220,38,38,0.6)] transition-all clip-corner uppercase text-xs" style={{ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }}>

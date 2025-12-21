@@ -7,15 +7,13 @@ const CACHE_VERSION = 'v15_hindi_script_fix';
 
 let currentSource: AudioBufferSourceNode | null = null;
 
-const checkApiKey = () => {
+const getApiKey = (): string | null => {
   const customKey = localStorage.getItem('nexa_client_api_key');
   if (customKey && customKey.trim().length > 10) return customKey;
   
-  // Check process.env.API_KEY
   const systemKey = process.env.API_KEY;
-  
   if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
-  throw new Error("MISSING_API_KEY");
+  return null;
 };
 
 function decodeBase64(base64: string) {
@@ -47,7 +45,6 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
 const playAudioBuffer = async (buffer: AudioBuffer, onStart: () => void, onEnd: () => void) => {
     const ctx = getAudioContext();
     
-    // CRITICAL FIX FOR MOBILE:
     if (ctx.state === 'suspended') {
         try { 
             await ctx.resume(); 
@@ -86,8 +83,15 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         }
     }
 
+    const apiKey = getApiKey();
+    if (!apiKey) {
+        console.error("TTS Generation Failed: Missing API Key.");
+        playErrorSound();
+        onEnd("MISSING_API_KEY");
+        return; // Exit gracefully
+    }
+
     try {
-        const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
         
         let pronunciationText = text
@@ -132,8 +136,6 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         let errorType = "TTS_FAILED";
         if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
             errorType = "TTS_QUOTA_EXCEEDED";
-        } else if (error.message === "MISSING_API_KEY") {
-            errorType = "MISSING_API_KEY";
         }
         onEnd(errorType);
     }

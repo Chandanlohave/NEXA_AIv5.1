@@ -4,13 +4,13 @@ import { getMemoryForPrompt, logAdminNotification } from "./memoryService";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 
-const checkApiKey = () => {
+const getApiKey = (): string | null => {
   const customKey = localStorage.getItem('nexa_client_api_key');
   if (customKey && customKey.trim().length > 10) return customKey;
   
   const systemKey = process.env.API_KEY;
   if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
-  throw new Error("MISSING_API_KEY");
+  return null;
 };
 
 export const getStudyHubSchedule = (): StudyHubSubject[] => {
@@ -28,8 +28,10 @@ export const getStudyHubSchedule = (): StudyHubSubject[] => {
 
 export const generateAdminBriefing = async (notifications: string[]): Promise<string> => {
     if (!notifications || notifications.length === 0) return "";
+    const apiKey = getApiKey();
+    if (!apiKey) return "Sir, logs offline due to missing API key.";
+    
     try {
-        const apiKey = checkApiKey();
         const ai = new GoogleGenAI({ apiKey });
         const prompt = `Report to Admin Chandan Lohave. Logs: ${JSON.stringify(notifications)}. Tone: Vengeful Shield. Start: "Sir, some level-0 entities showed disrespect..."`;
         const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: prompt });
@@ -38,6 +40,10 @@ export const generateAdminBriefing = async (notifications: string[]): Promise<st
 };
 
 export const generateIntroductoryMessage = async (user: UserProfile, briefing: string | null): Promise<string> => {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      return `मैं Nexa हूँ — Chandan Lohave की खास Assistant.\nWARNING: CORE OFFLINE. API Key not configured.`;
+    }
     if (user.role === UserRole.ADMIN && briefing) return briefing;
     const now = new Date();
     const hour = now.getHours();
@@ -47,8 +53,12 @@ export const generateIntroductoryMessage = async (user: UserProfile, briefing: s
 };
 
 export const generateTextResponse = async (input: string, user: UserProfile, isManualProtocolX: boolean): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+      return "[[STATE:WARNING]] // CORE OFFLINE: System API Key not configured. Please link a private key via the settings icon on the top right.";
+  }
+
   try {
-    const apiKey = checkApiKey();
     const ai = new GoogleGenAI({ apiKey });
     const history = await getMemoryForPrompt(user);
     
@@ -137,8 +147,11 @@ export const generateTextResponse = async (input: string, user: UserProfile, isM
 };
 
 export const generateTutorLesson = async (subject: StudyHubSubject, user: UserProfile): Promise<string> => {
+    const apiKey = getApiKey();
+    if (!apiKey) return "Study Hub offline. API Key not configured.";
+    
     try {
-        const ai = new GoogleGenAI({ apiKey: checkApiKey() });
+        const ai = new GoogleGenAI({ apiKey });
         const res = await ai.models.generateContent({ model: GEMINI_MODEL, contents: `Explain ${subject.courseName} as a Savage Mentor in Hinglish.` });
         return res.text || "Class offline.";
     } catch (e) { return "Error."; }

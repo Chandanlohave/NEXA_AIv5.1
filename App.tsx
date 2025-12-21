@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
 import StudyHubPanel from './components/StudyHubPanel';
-import ManageAccountsModal from './components/ManageAccountsModal';
 import InstallPWAButton from './components/InstallPWAButton';
-import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig, StudyHubSubject } from './types';
-import { generateTextResponse, generateIntroductoryMessage, generateAdminBriefing, generateTutorLesson } from './services/geminiService';
-import { playMicOnSound, playMicOffSound, playStartupSound, playErrorSound, playUserLoginSound, playSystemNotificationSound } from './services/audioService';
-import { appendMessageToMemory, clearAllMemory, getAdminNotifications, clearAdminNotifications, getLocalMessages, logAdminNotification } from './services/memoryService';
+import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
+import { generateTextResponse, generateIntroductoryMessage } from './services/geminiService';
+import { playMicOnSound, playErrorSound, playSystemNotificationSound } from './services/audioService';
+import { appendMessageToMemory, clearAllMemory, getLocalMessages } from './services/memoryService';
 import { speak as speakTextTTS, stop as stopTextTTS, speakIntro as speakIntroTTS } from './services/ttsService';
 
 // --- ICONS ---
@@ -110,9 +109,9 @@ const KeyboardInput = ({ onSend, disabled, variant = 'cyan' }: any) => {
           type="text" 
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="COMMAND INTERFACE..."
+          placeholder={disabled ? "PROCESSING..." : "COMMAND INTERFACE..."}
           disabled={disabled}
-          className={`relative w-full bg-white/10 dark:bg-black/60 border ${borderColor} rounded-full px-5 py-3 pr-12 text-sm font-mono ${textColor} focus:outline-none transition-all shadow-sm backdrop-blur-md uppercase tracking-wider`}
+          className={`relative w-full bg-white/10 dark:bg-black/60 border ${borderColor} rounded-full px-5 py-3 pr-12 text-sm font-mono ${textColor} focus:outline-none transition-all shadow-sm backdrop-blur-md uppercase tracking-wider disabled:opacity-50`}
         />
         <button type="submit" disabled={!text.trim() || disabled} className={`absolute right-3 p-2 ${btnColor} hover:brightness-150 disabled:opacity-30 transition-all`}>
           <svg className="w-5 h-5 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -132,14 +131,12 @@ const App: React.FC = () => {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isStudyHubOpen, setIsStudyHubOpen] = useState(false);
-  const [isManageAccountsModalOpen, setIsManageAccountsModalOpen] = useState(false);
   const [isSessionLocked, setIsSessionLocked] = useState(true);
   const [latency, setLatency] = useState<number | null>(null);
   const [adminNameClickCount, setAdminNameClickCount] = useState(0);
   const [isProtocolXSettingVisible, setIsProtocolXSettingVisible] = useState(false);
   const [isProtocolXManuallyActive, setIsProtocolXManuallyActive] = useState(false);
-
-  const isProcessingRef = useRef(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const getIdleState = useCallback(() => {
     const hour = new Date().getHours();
@@ -161,25 +158,19 @@ const App: React.FC = () => {
     const applyTheme = (theme: AppConfig['theme']) => {
       const root = window.document.documentElement;
       root.classList.remove('light', 'dark');
-
       if (theme === 'system') {
         const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         root.classList.add(systemTheme);
-        return;
+      } else {
+        root.classList.add(theme);
       }
-
-      root.classList.add(theme);
     };
 
     applyTheme(config.theme);
-
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
-      if (config.theme === 'system') {
-        applyTheme('system');
-      }
+      if (config.theme === 'system') applyTheme('system');
     };
-
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [config.theme]);
@@ -201,8 +192,8 @@ const App: React.FC = () => {
   };
 
   const processInput = async (text: string) => {
-    if (!user || isProcessingRef.current) return;
-    isProcessingRef.current = true;
+    if (!user || isProcessing) return;
+    setIsProcessing(true);
     const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     await appendMessageToMemory(user, userMsg);
@@ -219,23 +210,18 @@ const App: React.FC = () => {
         if (rawResponse.includes("[[STATE:LATE_NIGHT]]")) finalState = HUDState.LATE_NIGHT;
         else if (rawResponse.includes("[[STATE:WARNING]]")) { finalState = HUDState.WARNING; playErrorSound(); } 
         else if (rawResponse.includes("[[STATE:PROTECT]]")) { finalState = HUDState.PROTECT; playSystemNotificationSound(); }
-
         if (rawResponse.includes("[[ACTION:LOCKOUT]]")) shouldLockout = true;
 
-        // CRITICAL: Aggressive filtering of action markers and system states
         const cleanText = rawResponse
-            .replace(/\(.*?\)|\*.*?\*/g, '') // Remove (actions) and *actions*
-            .replace(/\[\[.*?\]\]/g, '')      // Remove [[STATE]] and [[ACTION]] markers
-            .replace(/\s\s+/g, ' ')           // Collapse multiple spaces
+            .replace(/\(.*?\)|\*.*?\*/g, '')
+            .replace(/\[\[.*?\]\]/g, '')
+            .replace(/\s\s+/g, ' ')
             .trim();
         
         if (!cleanText) {
             setHudState(finalState);
-            if (shouldLockout) {
-                handleLogout();
-            } else {
-                setTimeout(() => setHudState(getIdleState()), 1500);
-            }
+            if (shouldLockout) handleLogout();
+            else setTimeout(() => setHudState(getIdleState()), 1500);
             return;
         }
         
@@ -243,7 +229,7 @@ const App: React.FC = () => {
         await appendMessageToMemory(user, modelMsg);
         
         speakTextTTS(user, cleanText, 
-            () => { setMessages(prev => [...prev, modelMsg]); setHudState(finalState); }, 
+            () => { setMessages(prev => [...prev, modelMsg]); setHudState(HUDState.SPEAKING); },
             () => { 
                 setHudState(getIdleState());
                 if (shouldLockout) handleLogout(); 
@@ -252,10 +238,9 @@ const App: React.FC = () => {
     } catch (error: any) { 
         console.error("Input processing error:", error);
         setHudState(getIdleState()); 
-        playErrorSound(); 
+        playErrorSound();
     } finally {
-        // ENSURE THE LOCK IS ALWAYS RELEASED FOR THE NEXT COMMAND
-        isProcessingRef.current = false;
+        setIsProcessing(false);
     }
   };
 
@@ -271,42 +256,40 @@ const App: React.FC = () => {
     stopTextTTS();
     setUser(null);
     localStorage.removeItem('nexa_user');
+    setMessages([]);
     setIsSessionLocked(true);
   };
 
   const triggerIntro = async (currentUser: UserProfile) => {
-    isProcessingRef.current = true;
+    setIsProcessing(true);
     setHudState(HUDState.THINKING);
     try {
         const introText = await generateIntroductoryMessage(currentUser, null);
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now() };
         speakIntroTTS(currentUser, introMsg, 'intro', 
             () => { setMessages(prev => [...prev, introMsg]); setHudState(HUDState.SPEAKING); },
-            () => { isProcessingRef.current = false; setHudState(getIdleState()); }
+            () => { setIsProcessing(false); setHudState(getIdleState()); }
         );
-    } catch (e) { isProcessingRef.current = false; setHudState(getIdleState()); }
+    } catch (e) { setIsProcessing(false); setHudState(getIdleState()); }
   };
 
   const handleMicClick = () => {
-    // Recognition Logic simplified for display
     playMicOnSound();
   };
 
   const handleAdminNameClick = () => {
-    const newCount = adminNameClickCount + 1;
-    setAdminNameClickCount(newCount);
-    if (newCount >= 5) {
-        setIsProtocolXSettingVisible(true);
-    }
+    setAdminNameClickCount(prev => {
+        const newCount = prev + 1;
+        if (newCount >= 5) setIsProtocolXSettingVisible(true);
+        return newCount;
+    });
   };
 
   const handleProtocolXToggle = (isActive: boolean) => {
     setIsProtocolXManuallyActive(isActive);
     if (isActive) {
         playSystemNotificationSound();
-        if(user) {
-            speakTextTTS(user, "Protocol X Activated, Sir.", () => {}, () => {});
-        }
+        if(user) speakTextTTS(user, "Protocol X Activated, Sir.", () => {}, () => {});
         setHudState(HUDState.LATE_NIGHT);
     } else {
         setHudState(getIdleState());
@@ -323,7 +306,7 @@ const App: React.FC = () => {
         <div className="flex-[0.45] flex items-center justify-center min-h-[250px]"><HUD state={hudState} rotationSpeed={config.hudRotationSpeed} /></div>
         <div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div>
       </div>
-      <KeyboardInput onSend={processInput} disabled={isProcessingRef.current} variant={user.role === UserRole.ADMIN ? 'red' : 'cyan'} />
+      <KeyboardInput onSend={processInput} disabled={isProcessing} variant={user.role === UserRole.ADMIN ? 'red' : 'cyan'} />
       <ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.micRotationSpeed} />
       {user.role === UserRole.ADMIN ? (
         <AdminPanel 
@@ -332,8 +315,8 @@ const App: React.FC = () => {
           config={config} 
           onConfigChange={(c) => { setConfig(c); localStorage.setItem('nexa_config', JSON.stringify(c)); }} 
           onClearMemory={() => { clearAllMemory(user); window.location.reload(); }} 
-          onManageAccounts={() => setIsManageAccountsModalOpen(true)} 
-          onViewStudyHub={() => setIsStudyHubOpen(true)}
+          onManageAccounts={() => {}} 
+          onViewStudyHub={() => {setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB);}}
           onAdminNameClick={handleAdminNameClick}
           isProtocolXSettingVisible={isProtocolXSettingVisible}
           isProtocolXManuallyActive={isProtocolXManuallyActive}
@@ -343,6 +326,7 @@ const App: React.FC = () => {
         <UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={(c) => { setConfig(c); localStorage.setItem('nexa_config', JSON.stringify(c)); }} />
       )}
       <StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(getIdleState()); }} user={user} onStartLesson={() => {}} />
+      <InstallPWAButton />
     </div>
   );
 };
