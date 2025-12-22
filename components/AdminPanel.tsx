@@ -13,6 +13,7 @@ interface AdminPanelProps {
   isProtocolXSettingVisible: boolean;
   isProtocolXManuallyActive: boolean;
   onProtocolXToggle: (isActive: boolean) => void;
+  onLockProtocolX: () => void;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
@@ -26,7 +27,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onAdminNameClick,
   isProtocolXSettingVisible,
   isProtocolXManuallyActive,
-  onProtocolXToggle
+  onProtocolXToggle,
+  onLockProtocolX
 }) => {
   const [newApiKey, setNewApiKey] = useState('');
 
@@ -128,7 +130,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         {isProtocolXSettingVisible && (
-          <div className="pt-3 mt-2 border-t border-red-500/30 space-y-2 bg-red-900/10 p-2 animate-fade-in">
+          <div className="pt-3 mt-2 border-t border-red-500/30 space-y-3 bg-red-900/10 p-2 animate-fade-in">
               <label className="flex justify-between items-center text-red-400 text-xs font-mono cursor-pointer">
                   <span>PROTOCOL X</span>
                   <div className="relative">
@@ -141,8 +143,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                   </div>
               </label>
-              <p className="text-red-500/60 text-[10px] font-mono text-center">
-                  Manual override for intimate personality matrix.
+              
+              <button 
+                onClick={onLockProtocolX}
+                className="w-full py-1 bg-red-950/50 border border-red-500/30 text-red-500/70 hover:text-red-500 hover:border-red-500 text-[10px] font-mono uppercase tracking-widest transition-all"
+              >
+                LOCK & HIDE
+              </button>
+              
+              <p className="text-red-500/60 text-[9px] font-mono text-center">
+                  Manual override active. Click LOCK to hide.
               </p>
           </div>
         )}

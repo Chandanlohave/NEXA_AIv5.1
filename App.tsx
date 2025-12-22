@@ -27,7 +27,7 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
 
 const StatusBar = ({ userName, onLogout, onSettings, latency, onStudyHub }: any) => ( <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative"><div className="flex items-center gap-4"><div className="flex flex-col items-start"><div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">{userName}</div><div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div></div>{latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-4">LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)}</div><div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-zinc-900 dark:text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div><div className="flex items-center gap-4"><button onClick={onStudyHub} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative"><StudyIcon /><span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">STUDY HUB</span></button><button onClick={onSettings} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button><button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button></div></div> );
 const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, onToggleKeyboard, isKeyboardOpen }: any) => { const isListening = hudState === HUDState.LISTENING, isWarning = hudState === HUDState.WARNING, isProtect = hudState === HUDState.PROTECT, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING, isStudyHub = hudState === HUDState.STUDY_HUB, isLateNight = hudState === HUDState.LATE_NIGHT; let baseDuration = 8; if (isThinking) baseDuration = 2; else if (isSpeaking || isListening) baseDuration = 4; else if (isWarning || isProtect) baseDuration = 0.5; else if (isStudyHub) baseDuration = 6; else if (isLateNight) baseDuration = 12; const finalDuration = `${baseDuration / rotationSpeedMultiplier}s`; const buttonScale = (isListening || isWarning || isProtect || isThinking || isLateNight) ? 'scale-110' : 'hover:scale-105 active:scale-95'; let iconColorClass = 'text-nexa-cyan'; if (isListening || isWarning || isProtect) iconColorClass = 'text-nexa-red'; else if (isThinking) iconColorClass = 'text-nexa-yellow'; else if (isStudyHub) iconColorClass = 'text-nexa-blue'; else if (isLateNight) iconColorClass = 'text-purple-400'; const pulseClass = (isListening || isWarning || isProtect || isThinking || isStudyHub || isLateNight) ? 'animate-pulse' : ''; return ( <div className="w-full h-24 shrink-0 bg-gradient-to-t from-zinc-100 via-zinc-100/80 to-transparent dark:from-black dark:via-black/80 dark:to-transparent z-40 relative flex items-center justify-center"><div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4 pointer-events-none"><div className="w-full h-full flex justify-between items-center relative"><div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div><div className="w-24 flex-shrink-0"></div><div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40 relative"><div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-auto"><button onClick={onToggleKeyboard} className={`w-4 h-4 rotate-45 border ${isKeyboardOpen ? 'bg-nexa-cyan border-nexa-cyan shadow-[0_0_10px_rgba(41,223,255,0.8)]' : 'bg-black border-nexa-cyan/50 hover:border-nexa-cyan hover:shadow-[0_0_8px_rgba(41,223,255,0.5)]'} transition-all duration-300`}></button></div></div></div></div><button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''}`}><div className="absolute inset-0 rounded-full bg-white dark:bg-black shadow-inner"></div><div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}><div className="scale-[1.4]"><MicIcon rotationDuration={finalDuration} /></div></div></button></div> ); };
-const KeyboardInput = ({ onSend, disabled, variant = 'cyan', isVisible }: any) => { const [text, setText] = useState(''); const borderColor = variant === 'red' ? 'border-red-500/30 focus:border-red-500' : 'border-nexa-cyan/30 focus:border-nexa-cyan'; const textColor = variant === 'red' ? 'text-red-500 placeholder-red-500/30' : 'text-nexa-cyan placeholder-nexa-cyan/30'; const btnColor = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan'; const bgFocus = variant === 'red' ? 'group-focus-within:shadow-[0_0_15px_rgba(220,38,38,0.3)]' : 'group-focus-within:shadow-[0_0_15px_rgba(41,223,255,0.3)]'; const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!text.trim() || disabled) return; onSend(text); setText(''); }; if (!isVisible) return null; return ( <form onSubmit={handleSubmit} className="w-full px-6 pb-2 z-50 relative shrink-0 animate-slide-up"><div className={`relative flex items-center group ${bgFocus} rounded-full transition-shadow duration-300`}><div className={`absolute inset-0 bg-white/5 dark:bg-black/40 rounded-full blur-sm transition-all`}></div><input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder={disabled ? "PROCESSING..." : "COMMAND INTERFACE..."} disabled={disabled} className={`relative w-full bg-white/10 dark:bg-black/60 border ${borderColor} rounded-full px-5 py-3 pr-12 text-sm font-mono ${textColor} focus:outline-none transition-all shadow-sm backdrop-blur-md uppercase tracking-wider disabled:opacity-50`} /><button type="submit" disabled={!text.trim() || disabled} className={`absolute right-3 p-2 ${btnColor} hover:brightness-150 disabled:opacity-30 transition-all`}><svg className="w-5 h-5 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" /></svg></button></div></form> ); };
+const KeyboardInput = ({ onSend, disabled, variant = 'cyan', isVisible }: any) => { const [text, setText] = useState(''); const borderColor = variant === 'red' ? 'border-red-500/30 focus:border-red-500' : 'border-nexa-cyan/30 focus:border-nexa-cyan'; const textColor = variant === 'red' ? 'text-red-500 placeholder-red-500/30' : 'text-nexa-cyan placeholder-nexa-cyan/30'; const btnColor = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan'; const bgFocus = variant === 'red' ? 'group-focus-within:shadow-[0_0_15px_rgba(220,38,38,0.3)]' : 'group-focus-within:shadow-[0_0_15px_rgba(41,223,255,0.3)]'; const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!text.trim() || disabled) return; onSend(text, 'text'); setText(''); }; if (!isVisible) return null; return ( <form onSubmit={handleSubmit} className="w-full px-6 pb-2 z-50 relative shrink-0 animate-slide-up"><div className={`relative flex items-center group ${bgFocus} rounded-full transition-shadow duration-300`}><div className={`absolute inset-0 bg-white/5 dark:bg-black/40 rounded-full blur-sm transition-all`}></div><input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder={disabled ? "PROCESSING..." : "COMMAND INTERFACE..."} disabled={disabled} className={`relative w-full bg-white/10 dark:bg-black/60 border ${borderColor} rounded-full px-5 py-3 pr-12 text-sm font-mono ${textColor} focus:outline-none transition-all shadow-sm backdrop-blur-md uppercase tracking-wider disabled:opacity-50`} /><button type="submit" disabled={!text.trim() || disabled} className={`absolute right-3 p-2 ${btnColor} hover:brightness-150 disabled:opacity-30 transition-all`}><svg className="w-5 h-5 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" /></svg></button></div></form> ); };
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -51,10 +51,14 @@ const App: React.FC = () => {
   const recognitionRef = useRef<any>(null);
   const introPlayedRef = useRef<boolean>(false);
   const remindersShownRef = useRef<{rest?: boolean, duty?: boolean}>({});
+  
+  // HARD LOCK REFS
+  const lastInputRef = useRef<{text: string, time: number}>({text: '', time: 0});
+  const isProcessingRef = useRef<boolean>(false);
 
   const getIdleState = useCallback(() => {
-    const hour = new Date().getHours();
-    if (user && user.role === UserRole.ADMIN && (hour >= 23 || isProtocolXManuallyActive)) {
+    // UPDATED: Strictly use manual flag, no time-based auto activation for Protocol X
+    if (user && user.role === UserRole.ADMIN && isProtocolXManuallyActive) {
       return HUDState.LATE_NIGHT;
     }
     return HUDState.IDLE;
@@ -68,6 +72,11 @@ const App: React.FC = () => {
     setAbuseWarningCount(0);
     setIsSessionLocked(true);
     introPlayedRef.current = false;
+    isProcessingRef.current = false;
+    // Reset Protocol X on logout
+    setIsProtocolXManuallyActive(false);
+    setIsProtocolXSettingVisible(false);
+    setAdminNameClickCount(0);
   }, []);
 
   const handleFunctionCall = (fc: any) => {
@@ -90,7 +99,11 @@ const App: React.FC = () => {
       const modelMsg: ChatMessage = { role: 'model', text: confirmationText, timestamp: Date.now() };
       speakTextTTS(user!, confirmationText,
           () => { setMessages(prev => [...prev, modelMsg]); setHudState(HUDState.SPEAKING); },
-          () => { setHudState(getIdleState()); setIsProcessing(false); }
+          () => { 
+              setHudState(getIdleState()); 
+              setIsProcessing(false); 
+              isProcessingRef.current = false;
+          }
       );
 
     } catch (e) {
@@ -98,19 +111,49 @@ const App: React.FC = () => {
       const errorMsg: ChatMessage = { role: 'model', text: "Sorry, I encountered an error trying to perform that action.", timestamp: Date.now() };
        speakTextTTS(user!, errorMsg.text,
           () => { setMessages(prev => [...prev, errorMsg]); setHudState(HUDState.WARNING); },
-          () => { setHudState(getIdleState()); setIsProcessing(false); }
+          () => { 
+              setHudState(getIdleState()); 
+              setIsProcessing(false); 
+              isProcessingRef.current = false;
+          }
       );
     }
   };
 
-  const processInput = useCallback(async (text: string) => {
-    if (!user || isProcessing) return;
+  const processInput = useCallback(async (text: string, inputSource: 'text' | 'mic') => {
+    // HARD LOCK CHECK
+    if (!user || isProcessingRef.current) return;
+    
+    // 1. HARD STOP SPEECH RECOGNITION
+    if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch(e) {}
+    }
+
+    const normalizedText = text.trim().toLowerCase();
+    const now = Date.now();
+    
+    // 2. Strict Duplicate Check (Reduced to 2000ms from 5000ms for responsiveness)
+    if (normalizedText === lastInputRef.current.text && (now - lastInputRef.current.time) < 2000) {
+        console.log("Duplicate input ignored (Echo/Lag):", text);
+        return;
+    }
+
+    // LOCK THE SYSTEM
+    isProcessingRef.current = true;
     setIsProcessing(true);
+    setHudState(HUDState.THINKING);
+    lastInputRef.current = { text: normalizedText, time: now };
+
     const userMsg: ChatMessage = { role: 'user', text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     await appendMessageToMemory(user, userMsg);
-    setHudState(HUDState.THINKING);
     setVisualEffect('none');
+    
+    // DELAY FOR MIC INPUT: Allow Android audio buffer to switch from Recording -> Media
+    if (inputSource === 'mic') {
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
     const startTime = Date.now();
 
     try {
@@ -134,7 +177,11 @@ const App: React.FC = () => {
         
         if (!cleanText) {
             setHudState(finalState);
-            if (shouldLockout) handleLogout(); else setIsProcessing(false);
+            if (shouldLockout) handleLogout(); 
+            else {
+                setIsProcessing(false);
+                isProcessingRef.current = false;
+            }
             return;
         }
         
@@ -142,12 +189,17 @@ const App: React.FC = () => {
         await appendMessageToMemory(user, modelMsg);
         
         speakTextTTS(user, cleanText, 
-            () => { setMessages(prev => [...prev, modelMsg]); setHudState(HUDState.SPEAKING); },
+            () => { 
+                setMessages(prev => [...prev, modelMsg]); 
+                setHudState(HUDState.SPEAKING); 
+            },
             () => { 
                 setHudState(getIdleState());
                 setVisualEffect('none');
                 if (shouldLockout) handleLogout();
+                // UNLOCK ONLY AFTER SPEECH IS DONE
                 setIsProcessing(false);
+                isProcessingRef.current = false;
             }
         );
     } catch (error: any) { 
@@ -156,13 +208,14 @@ const App: React.FC = () => {
         setVisualEffect('none');
         playErrorSound();
         setIsProcessing(false);
+        isProcessingRef.current = false;
     }
-  }, [user, isProcessing, getIdleState, isProtocolXManuallyActive, handleLogout, abuseWarningCount]);
+  }, [user, getIdleState, isProtocolXManuallyActive, handleLogout, abuseWarningCount]);
 
   // Proactive Reminders for Admin
   useEffect(() => {
     const reminderInterval = setInterval(() => {
-        if (user?.role !== UserRole.ADMIN || isProcessing || introPlayedRef.current === false) return;
+        if (user?.role !== UserRole.ADMIN || isProcessingRef.current || introPlayedRef.current === false) return;
 
         const now = new Date();
         const hour = now.getHours();
@@ -187,7 +240,7 @@ const App: React.FC = () => {
     }, 60 * 1000); // Check every minute
 
     return () => clearInterval(reminderInterval);
-  }, [user, isProcessing]);
+  }, [user]);
 
   useEffect(() => {
     if (hudState === HUDState.WARNING || hudState === HUDState.PROTECT) document.body.classList.add('danger-mode');
@@ -224,8 +277,13 @@ const App: React.FC = () => {
     recognition.interimResults = false;
     recognition.onstart = () => { stopTextTTS(); setHudState(HUDState.LISTENING); setIsListening(true); };
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // CHECK HARD LOCK IMMEDIATELY
+      if (isProcessingRef.current) {
+          console.warn("Input dropped: System is processing.");
+          return;
+      }
       const transcript = event.results[event.results.length - 1][0].transcript.trim();
-      if (transcript) processInput(transcript);
+      if (transcript) processInput(transcript, 'mic');
     };
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => { if (event.error !== 'no-speech') playErrorSound(); setHudState(getIdleState()); setIsListening(false); };
     recognition.onend = () => { setIsListening(false); setHudState(prevState => prevState === HUDState.LISTENING ? getIdleState() : prevState); };
@@ -234,9 +292,13 @@ const App: React.FC = () => {
 
   const triggerIntro = useCallback(async (currentUser: UserProfile) => {
     if (introPlayedRef.current) return;
+    introPlayedRef.current = true; // Set flag immediately
+    
+    isProcessingRef.current = true;
     setIsProcessing(true);
     setHudState(HUDState.THINKING);
 
+    // Admin notifications
     if (currentUser.role === UserRole.ADMIN) {
         const notifications = await getAdminNotifications();
         if (notifications && notifications.length > 0) {
@@ -248,27 +310,65 @@ const App: React.FC = () => {
             });
         }
     }
+
     try {
-        const introText = await generateIntroductoryMessage(currentUser);
-        if (!introText) throw new Error("Intro text generation failed");
+        let introText = await generateIntroductoryMessage(currentUser);
+        if (!introText) introText = `Greetings, ${currentUser.name}. I am online.`; // Fallback
+        
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now(), isIntro: true };
+        
+        // SAVE INTRO TO MEMORY: This ensures the AI has context that it has already introduced itself.
+        await appendMessageToMemory(currentUser, introMsg);
+
         speakIntroTTS(currentUser, introMsg.text,
-            () => { setMessages(prev => [...prev, introMsg]); setHudState(HUDState.SPEAKING); },
-            () => { setIsProcessing(false); setHudState(getIdleState()); introPlayedRef.current = true; setTimeout(() => setMessages(prev => prev.filter(m => !m.isIntro)), 100); }
+            () => { 
+                setMessages(prev => [...prev, introMsg]); 
+                setHudState(HUDState.SPEAKING); 
+            },
+            () => { 
+                setIsProcessing(false); 
+                isProcessingRef.current = false;
+                setHudState(getIdleState()); 
+            }
         );
-    } catch (e) { setIsProcessing(false); setHudState(getIdleState()); }
+    } catch (e) { 
+        console.error("Intro Error", e);
+        setIsProcessing(false); 
+        isProcessingRef.current = false;
+        setHudState(getIdleState()); 
+    }
   }, [getIdleState]);
 
   const handleResumeSession = () => { setIsSessionLocked(false); if (user) setTimeout(() => triggerIntro(user), 500); };
   const handleLogin = (profile: UserProfile) => { setUser(profile); localStorage.setItem('nexa_user', JSON.stringify(profile)); setMessages(getLocalMessages(profile)); setIsSessionLocked(false); setTimeout(() => triggerIntro(profile), 500); };
-  const handleMicClick = () => { if (isProcessing || !recognitionRef.current) return; if (isListening) { recognitionRef.current.stop(); } else { setIsKeyboardOpen(false); playMicOnSound(); try { recognitionRef.current.start(); } catch (e) { playErrorSound(); } } };
+  
+  const handleMicClick = () => { 
+      if (isProcessingRef.current || !recognitionRef.current) return; 
+      if (isListening) { 
+          recognitionRef.current.stop(); 
+      } else { 
+          setIsKeyboardOpen(false); 
+          playMicOnSound(); 
+          try { recognitionRef.current.start(); } catch (e) { playErrorSound(); } 
+      } 
+  };
+  
   const handleAdminNameClick = () => setAdminNameClickCount(prev => { const newCount = prev + 1; if (newCount >= 5) setIsProtocolXSettingVisible(true); return newCount; });
   const handleProtocolXToggle = (isActive: boolean) => { setIsProtocolXManuallyActive(isActive); if (isActive) { playSystemNotificationSound(); if(user) speakTextTTS(user, "Protocol X Activated, Sir.", () => {}, () => {}); setHudState(HUDState.LATE_NIGHT); } else { setHudState(getIdleState()); } };
+  
+  // NEW: Handler to lock and hide Protocol X
+  const handleLockProtocolX = () => {
+      setIsProtocolXManuallyActive(false);
+      setIsProtocolXSettingVisible(false);
+      setAdminNameClickCount(0);
+      setHudState(HUDState.IDLE);
+      playSystemNotificationSound();
+  };
 
   if (!user || isSessionLocked) return <Auth onLogin={handleLogin} onResume={handleResumeSession} isResuming={!!user} savedUserName={user?.name} />;
   const visualEffectClass = visualEffect === 'glitch' ? 'glitch-effect' : visualEffect === 'alert' ? 'alert-effect' : '';
 
-  return ( <div className={`relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden transition-all duration-700 ${visualEffectClass}`}><div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div><StatusBar userName={user.name} onLogout={handleLogout} latency={latency} onSettings={() => user.role === UserRole.ADMIN ? setIsAdminPanelOpen(true) : setIsUserSettingsOpen(true)} onStudyHub={() => { setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB); }} /><div className="flex-1 flex flex-col relative z-10 overflow-hidden"><div className="flex-[0.45] flex items-center justify-center min-h-[250px]"><HUD state={hudState} rotationSpeed={config.hudRotationSpeed} /></div><div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div></div><KeyboardInput onSend={processInput} disabled={isProcessing} variant={user.role === UserRole.ADMIN ? 'red' : 'cyan'} isVisible={isKeyboardOpen} /><ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.micRotationSpeed} onToggleKeyboard={() => setIsKeyboardOpen(!isKeyboardOpen)} isKeyboardOpen={isKeyboardOpen} />{user.role === UserRole.ADMIN ? (<AdminPanel isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} config={config} onConfigChange={(c) => { setConfig(c); localStorage.setItem('nexa_config', JSON.stringify(c)); }} onClearMemory={() => { clearAllMemory(user); window.location.reload(); }} onManageAccounts={() => setIsManageAccountsModalOpen(true)} onViewStudyHub={() => {setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB);}} onAdminNameClick={handleAdminNameClick} isProtocolXSettingVisible={isProtocolXSettingVisible} isProtocolXManuallyActive={isProtocolXManuallyActive} onProtocolXToggle={handleProtocolXToggle} />) : (<UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={(c) => { setConfig(c); localStorage.setItem('nexa_config', JSON.stringify(c)); }} />)}<StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(getIdleState()); }} user={user} onStartLesson={(subject) => processInput(`Start a lesson on ${subject.courseName}, course code ${subject.courseCode}`)} /><ManageAccountsModal isOpen={isManageAccountsModalOpen} onClose={() => setIsManageAccountsModalOpen(false)} /><InstallPWAButton /></div> );
+  return ( <div className={`relative w-full h-full bg-zinc-100 dark:bg-black flex flex-col overflow-hidden transition-all duration-700 ${visualEffectClass}`}><div className="perspective-grid"></div><div className="vignette"></div><div className="scanlines"></div><StatusBar userName={user.name} onLogout={handleLogout} latency={latency} onSettings={() => user.role === UserRole.ADMIN ? setIsAdminPanelOpen(true) : setIsUserSettingsOpen(true)} onStudyHub={() => { setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB); }} /><div className="flex-1 flex flex-col relative z-10 overflow-hidden"><div className="flex-[0.45] flex items-center justify-center min-h-[250px]"><HUD state={hudState} rotationSpeed={config.hudRotationSpeed} /></div><div className="flex-[0.55] flex justify-center w-full px-4 pb-4 overflow-hidden"><ChatPanel messages={messages} userName={user.name} userRole={user.role} hudState={hudState} onTypingComplete={() => {}} /></div></div><KeyboardInput onSend={(t: string) => processInput(t, 'text')} disabled={isProcessing} variant={user.role === UserRole.ADMIN ? 'red' : 'cyan'} isVisible={isKeyboardOpen} /><ControlDeck onMicClick={handleMicClick} hudState={hudState} rotationSpeedMultiplier={config.micRotationSpeed} onToggleKeyboard={() => setIsKeyboardOpen(!isKeyboardOpen)} isKeyboardOpen={isKeyboardOpen} />{user.role === UserRole.ADMIN ? (<AdminPanel isOpen={isAdminPanelOpen} onClose={() => setIsAdminPanelOpen(false)} config={config} onConfigChange={(c) => { setConfig(c); localStorage.setItem('nexa_config', JSON.stringify(c)); }} onClearMemory={() => { clearAllMemory(user); window.location.reload(); }} onManageAccounts={() => setIsManageAccountsModalOpen(true)} onViewStudyHub={() => {setIsStudyHubOpen(true); setHudState(HUDState.STUDY_HUB);}} onAdminNameClick={handleAdminNameClick} isProtocolXSettingVisible={isProtocolXSettingVisible} isProtocolXManuallyActive={isProtocolXManuallyActive} onProtocolXToggle={handleProtocolXToggle} onLockProtocolX={handleLockProtocolX} />) : (<UserSettingsPanel isOpen={isUserSettingsOpen} onClose={() => setIsUserSettingsOpen(false)} config={config} onConfigChange={(c) => { setConfig(c); localStorage.setItem('nexa_config', JSON.stringify(c)); }} />)}<StudyHubPanel isOpen={isStudyHubOpen} onClose={() => {setIsStudyHubOpen(false); setHudState(getIdleState()); }} user={user} onStartLesson={(subject) => processInput(`Start a lesson on ${subject.courseName}, course code ${subject.courseCode}`, 'text')} /><ManageAccountsModal isOpen={isManageAccountsModalOpen} onClose={() => setIsManageAccountsModalOpen(false)} /><InstallPWAButton /></div> );
 };
 
 export default App;
