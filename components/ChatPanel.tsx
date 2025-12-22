@@ -87,7 +87,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
 
           return (
             <div key={msg.timestamp + idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
-              <div className={`relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed ${isUser ? 'text-right border-r border-nexa-blue/30 bg-gradient-to-l from-nexa-blue/10 to-transparent' : 'text-left border-l border-nexa-cyan/30 bg-gradient-to-r from-nexa-cyan/10 to-transparent dark:from-nexa-cyan/5'}`}>
+              <div className={`relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed ${isUser ? 'text-right border-r border-nexa-blue/30 bg-gradient-to-l from-nexa-blue/20 to-transparent' : 'text-left border-l border-nexa-cyan/30 bg-gradient-to-r from-nexa-cyan/10 to-transparent dark:from-nexa-cyan/5'}`}>
                 <div className={`${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'} dark:text-inherit text-zinc-800 dark:text-zinc-100`}>
                   {isUser ? (
                     <span className="whitespace-pre-wrap">{msg.text}</span>

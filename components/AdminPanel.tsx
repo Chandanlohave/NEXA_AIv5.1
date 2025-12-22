@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppConfig } from '../types';
 
 interface AdminPanelProps {
@@ -28,6 +28,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   isProtocolXManuallyActive,
   onProtocolXToggle
 }) => {
+  const [newApiKey, setNewApiKey] = useState('');
+
   if (!isOpen) return null;
 
   const handleExportLogs = () => {
@@ -44,6 +46,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     a.download = `NEXA_LOGS_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleSaveApiKey = () => {
+    if (newApiKey.trim().length > 10) {
+        localStorage.setItem('nexa_admin_api_key', newApiKey.trim());
+        alert('API Key updated. The app will now reload to use the new key.');
+        window.location.reload();
+    } else {
+        alert('Please enter a valid API key.');
+    }
   };
 
   const ThemeButton: React.FC<{label: string, value: AppConfig['theme']}> = ({ label, value }) => {
@@ -70,7 +82,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
       <div className="space-y-4">
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Appearance</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Appearance</label>
           <div className="flex gap-1">
             <ThemeButton label="Light" value="light" />
             <ThemeButton label="Dark" value="dark" />
@@ -79,7 +91,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">HUD Rotation Speed</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">HUD Rotation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -92,7 +104,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Mic Rotation Speed</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Mic Rotation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -105,7 +117,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Animations</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Animations</label>
           <button 
             onClick={() => onConfigChange({...config, animationsEnabled: !config.animationsEnabled})}
             className={`w-full py-2 text-xs font-mono border ${config.animationsEnabled ? 'border-nexa-cyan text-nexa-cyan' : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-500'}`}
@@ -136,6 +148,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
 
         <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+          <div>
+            <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Update Admin API Key</label>
+            <div className="flex gap-2">
+              <input 
+                type="password"
+                placeholder="Enter new Gemini API Key"
+                value={newApiKey}
+                onChange={(e) => setNewApiKey(e.target.value)}
+                className="flex-1 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-black dark:text-white px-2 py-1 text-xs focus:border-nexa-cyan outline-none"
+              />
+              <button onClick={handleSaveApiKey} className="px-3 bg-nexa-cyan text-black font-bold text-xs hover:bg-white transition-colors">SAVE</button>
+            </div>
+            <p className="text-zinc-500 dark:text-zinc-600 text-[10px] font-mono mt-1">Saves key to browser. Reloads app.</p>
+          </div>
+
            <button 
              onClick={handleExportLogs}
              className="w-full py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:border-black dark:hover:border-white text-xs font-mono transition-colors"

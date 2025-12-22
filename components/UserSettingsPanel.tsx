@@ -32,7 +32,7 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
 
       <div className="space-y-4">
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Appearance</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Appearance</label>
           <div className="flex gap-1">
             <ThemeButton label="Light" value="light" />
             <ThemeButton label="Dark" value="dark" />
@@ -41,7 +41,7 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
         </div>
         
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">HUD Animation Speed</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">HUD Animation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -54,7 +54,7 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Mic Animation Speed</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Mic Animation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -67,7 +67,7 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Animations</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Animations</label>
           <button 
             onClick={() => onConfigChange({...config, animationsEnabled: !config.animationsEnabled})}
             className={`w-full py-2 text-xs font-mono border ${config.animationsEnabled ? 'border-nexa-cyan text-nexa-cyan' : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-500'}`}

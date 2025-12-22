@@ -14,9 +14,13 @@ interface AuthProps {
 const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan', className = '' }: any) => {
   const isRed = variant === 'red';
   const colorClass = isRed ? 'text-nexa-red' : 'text-nexa-cyan';
-  const glowClass = isRed ? 'shadow-[0_0_15px_rgba(255,42,42,0.4)]' : 'shadow-[0_0_15px_rgba(41,223,255,0.4)]';
   const borderClass = isRed ? 'bg-nexa-red' : 'bg-nexa-cyan';
   const placeholderClass = isRed ? 'placeholder-red-900/40' : 'placeholder-zinc-400 dark:placeholder-nexa-cyan/20';
+  
+  const isSecretAdminInput = type === 'password' && isRed;
+  // For the admin password, force a solid black background and make the text/dots and their shadow also solid black.
+  // This makes them invisible. The placeholder color is handled separately by placeholderClass.
+  const secretStyle = isSecretAdminInput ? { color: '#000', textShadow: '0 0 0 #000' } : {};
 
   return (
     <div className="relative group z-50 my-6">
@@ -29,9 +33,10 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
             value={value}
             onChange={onChange}
             autoFocus={autoFocus}
-            className={`w-full bg-white/5 dark:bg-black/20 border-b border-transparent group-focus-within:border-${isRed ? 'red-500' : 'nexa-cyan'}/30 text-zinc-800 dark:text-white text-center font-mono text-sm focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-[0.2em] relative transition-all py-2 rounded-sm uppercase ${className}`}
+            style={secretStyle}
+            className={`w-full ${isSecretAdminInput ? 'bg-black' : 'bg-white/5 dark:bg-black/20'} border-b border-transparent group-focus-within:border-${isRed ? 'red-500' : 'nexa-cyan'}/30 text-zinc-800 dark:text-white text-center font-mono text-sm focus:ring-0 focus:outline-none ${placeholderClass} z-50 tracking-[0.2em] relative transition-all py-2 rounded-sm uppercase ${className}`}
             placeholder={placeholder}
-            autoComplete="off"
+            autoComplete={type === 'password' ? 'new-password' : 'off'}
           />
           <div className={`absolute bottom-0 left-0 h-[1px] w-0 group-focus-within:w-full ${borderClass} transition-all duration-700 opacity-50`}></div>
         </div>
@@ -146,7 +151,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
       setError('// ERROR: ADMIN API KEY NOT CONFIGURED');
       return;
     }
-    if (formData.username === 'Chandan' && formData.password === 'Nexa') {
+
+    if (formData.password.toLowerCase() === 'nexa' || formData.password === '2127') {
       const adminProfile: UserProfile = { name: 'Chandan', mobile: 'admin_001', role: UserRole.ADMIN, gender: 'male' };
       completeLogin(adminProfile);
     } else {
@@ -210,7 +216,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       
       <div className="absolute top-24 text-center animate-fade-in z-50">
-          <div className="text-[10px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.4em] uppercase">{isResuming ? 'Biometric Link Ready' : 'Project NEXA'}</div>
+          <div className="text-[10px] text-zinc-600 dark:text-nexa-cyan/50 font-mono tracking-[0.4em] uppercase">{isResuming ? 'Biometric Link Ready' : 'Project NEXA'}</div>
           {isResuming ? (
               <div className="text-5xl font-black text-zinc-800 dark:text-white tracking-[0.4em] uppercase drop-shadow-[0_0_15px_rgba(41,223,255,0.2)] dark:drop-shadow-[0_0_15px_rgba(41,223,255,0.4)] mt-2">{savedUserName}</div>
           ) : (
@@ -250,7 +256,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                         }
                         window.location.reload();
                     }}
-                    className="mt-8 text-[9px] text-zinc-500 hover:text-red-500 font-mono tracking-[0.3em] uppercase border-b border-zinc-300 dark:border-zinc-800 hover:border-red-500 transition-all"
+                    className="mt-8 text-[9px] text-zinc-600 dark:text-zinc-500 hover:text-red-500 font-mono tracking-[0.3em] uppercase border-b border-zinc-300 dark:border-zinc-800 hover:border-red-500 transition-all"
                   >
                     Switch Identity
                   </button>
@@ -268,11 +274,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               <div className="flex items-center justify-center gap-8 py-4">
                  <label className="flex items-center gap-3 cursor-pointer group">
                     <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan w-4 h-4" />
-                    <span className="text-[10px] font-mono text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">MALE</span>
+                    <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">MALE</span>
                  </label>
                  <label className="flex items-center gap-3 cursor-pointer group">
                     <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="accent-nexa-cyan w-4 h-4" />
-                    <span className="text-[10px] font-mono text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">FEMALE</span>
+                    <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">FEMALE</span>
                  </label>
               </div>
 
@@ -281,8 +287,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               </div>
 
               <div className="pt-6 flex justify-between items-center px-1">
-                  <button onClick={() => setMode('INIT')} className="text-[10px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Cancel</button>
-                  <button onClick={switchToAdmin} className="text-[10px] text-zinc-500/40 hover:text-red-500 font-mono tracking-widest uppercase transition-colors">Admin_OS</button>
+                  <button onClick={() => setMode('INIT')} className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Cancel</button>
+                  <button onClick={switchToAdmin} className="text-[10px] text-zinc-500/60 dark:text-zinc-500/40 hover:text-red-500 font-mono tracking-widest uppercase transition-colors">Admin_OS</button>
               </div>
             </div>
           )}
@@ -290,7 +296,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
           {mode === 'USER_KEY_INPUT' && (
             <div className="animate-slide-up space-y-4">
                <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-4 tracking-[0.3em] uppercase">API Key Required</div></div>
-               <p className="text-zinc-500 dark:text-zinc-400 text-[10px] text-center font-mono leading-relaxed tracking-wider px-2">NEXA requires a personal Google Gemini key to operate. This is stored securely on your device.</p>
+               <p className="text-zinc-600 dark:text-zinc-400 text-[10px] text-center font-mono leading-relaxed tracking-wider px-2">NEXA requires a personal Google Gemini key to operate. This is stored securely on your device.</p>
                <BracketInput name="customApiKey" placeholder="ENTER YOUR GEMINI KEY" type="password" className="password-hidden" value={formData.customApiKey} onChange={handleChange} autoFocus />
                <div className="pt-6">
                    <CyberButton onClick={handleUserKeySubmit} label="Authorize & Connect" loading={loading} />
@@ -298,11 +304,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                <div className="pt-4 flex justify-between items-center px-1">
                   <button 
                       onClick={() => isResuming ? setMode('INIT') : setMode('USER_CREATE')} 
-                      className="text-[10px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"
+                      className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"
                   >
                       <span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Back
                   </button>
-                  <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-all">Get API Key</a>
+                  <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-all">Get API Key</a>
                </div>
             </div>
           )}
@@ -316,8 +322,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                 </div>
               </div>
               <div className="space-y-6">
-                <BracketInput name="username" placeholder="ROOT_IDENT" type="text" value={formData.username} onChange={handleChange} autoFocus variant="red" />
-                <BracketInput name="password" placeholder="SECURE_PASS" type="password" value={formData.password} onChange={handleChange} variant="red" />
+                <BracketInput name="password" placeholder="SECURE_PASS" type="password" value={formData.password} onChange={handleChange} variant="red" autoFocus className="caret-transparent" />
               </div>
               <div className="pt-10 space-y-6">
                 <button onClick={handleAdminLogin} disabled={loading} className="w-full py-5 bg-red-600/90 text-white font-black tracking-[0.4em] hover:bg-red-500 hover:shadow-[0_0_30px_rgba(220,38,38,0.6)] transition-all clip-corner uppercase text-xs" style={{ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }}>
@@ -332,7 +337,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
         </div>
         <div className="flex justify-between mt-4 px-2 opacity-30"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono uppercase tracking-[0.2em]`}>Secured_Line</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono tracking-[0.2em]`}>NEXA_V12_LOHAVE</div></div>
       </div>
-      <div className="absolute bottom-20 text-center text-[10px] font-mono font-bold text-zinc-500 dark:text-white/70 tracking-widest animate-fade-in z-50 uppercase">
+      <div className="absolute bottom-20 text-center text-[10px] font-mono font-bold text-zinc-600 dark:text-white/70 tracking-widest animate-fade-in z-50 uppercase">
         © All Copyright Reserved By Chandan Lohave 2025
       </div>
       <InstallPWAButton />

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { UserProfile, ChatMessage } from "../types";
+import { UserProfile } from "../types";
 import { getAudioContext, playErrorSound } from "./audioService";
 
 let currentSource: AudioBufferSourceNode | null = null;
@@ -26,10 +26,19 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
   return buffer;
 }
 
+// Function to enforce pronunciation rules for speech
+const applyPronunciationRules = (text: string): string => {
+    // Rule: "Lohave" must be pronounced "लोहवे"
+    return text.replace(/Lohave/gi, 'लोहवे');
+};
+
 export const speak = async (user: UserProfile, text: string, onStart: () => void, onEnd: (error?: string) => void) => {
     if (currentSource) { currentSource.stop(); currentSource = null; }
 
-    const apiKey = process.env.API_KEY;
+    const apiKey = user.role === 'ADMIN' 
+        ? (localStorage.getItem('nexa_admin_api_key') || process.env.API_KEY)
+        : localStorage.getItem(`nexa_client_api_key_${user.mobile}`);
+
     if (!apiKey || apiKey === "undefined") {
         onEnd("MISSING_API_KEY");
         return;
@@ -38,9 +47,12 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
     const ctx = getAudioContext();
     try {
         const ai = new GoogleGenAI({ apiKey });
+
+        const textForSpeech = applyPronunciationRules(text);
+
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text }] }],
+            contents: [{ parts: [{ text: textForSpeech }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -48,7 +60,7 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
         });
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) throw new Error("No audio");
+        if (!base64Audio) throw new Error("No audio data received from TTS API.");
 
         const audioBytes = decodeBase64(base64Audio);
         const audioBuffer = await decodePcmAudioData(audioBytes, ctx);
@@ -57,13 +69,15 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
         source.onended = () => { onEnd(); currentSource = null; };
+        
+        onStart(); // Trigger UI update as soon as we start playing
         source.start();
         currentSource = source;
-        onStart();
-    } catch (e) {
-        console.error("TTS Error", e);
+
+    } catch (e: any) {
+        console.error("TTS Error:", e.message);
         playErrorSound();
-        onEnd("FAILED");
+        onEnd("TTS_FAILED");
     }
 };
 
