@@ -58,17 +58,6 @@ const getGeolocation = (): Promise<{ city: string; error?: string }> => {
   });
 };
 
-const generateDateTimeWeatherAnnouncement = async (city: string, user: UserProfile): Promise<string> => {
-    try {
-        const ai = getAiInstance(user);
-        const now = new Date();
-        const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
-        const prompt = `You are NEXA. Provide a brief, single-sentence time update in conversational Hinglish for your creator, Chandan sir. Current Time: ${time}. Example: "Sir, abhi shaam ke 5 bajkar 30 minute ho rahe hain." Return ONLY the string.`;
-        const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: prompt });
-        return response.text || "";
-    } catch (e) { return ""; }
-};
-
 export const generateAdminBriefing = async (notifications: string[], user: UserProfile): Promise<string> => {
     if (!notifications || notifications.length === 0) return "";
     try {
@@ -80,18 +69,73 @@ export const generateAdminBriefing = async (notifications: string[], user: UserP
 };
 
 export const generateIntroductoryMessage = async (user: UserProfile): Promise<string> => {
-    const now = new Date();
-    const hour = now.getHours();
-    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-    let fixedIntro;
-    if (user.role === UserRole.ADMIN) {
-        fixedIntro = `NEXA Online. ${greeting} Chandan Sir.`;
-    } else {
-        fixedIntro = `Welcome, ${user.name}. Main NEXA hoon, Chandan Lohave ki Personal AI.`;
+    try {
+        const ai = getAiInstance(user);
+        const now = new Date();
+        const hour = now.getHours();
+        const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
+        const date = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const { city } = await getGeolocation();
+
+        const introGenerationPrompt = `
+            You are NEXA, a futuristic AI assistant. Your task is to generate a welcome message for your user based on the provided context. Follow these rules STRICTLY.
+
+            **FIXED CORE IDENTITY LINE (MUST BE INCLUDED):**
+            "jise Chandan Lohave sir ne design kiya hai"
+
+            **CONTEXT:**
+            - User Role: ${user.role}
+            - User Name: ${user.name}
+            - Current Time: ${time}
+            - Current Date: ${date}
+            - Location: ${city}
+            - Is Morning: ${hour < 12}
+
+            **RULES:**
+
+            1.  **IF User Role is ADMIN:**
+                - Address the user as "Chandan sir".
+                - Use this EXACT professional introduction template:
+                "Allow me to introduce myself.
+                I am Nexa — your personal AI assistant, jise Chandan Lohave sir ne design kiya hai.
+                My role goes beyond basic assistance.
+                I analyze, plan, and simplify,
+                so execution remains smooth and precise.
+                All systems are operational.
+                How would you like to proceed, Chandan sir?"
+                - **DO NOT** add date, time, weather, or morning add-ons for the ADMIN.
+
+            2.  **IF User Role is USER:**
+                - Address the user by their name: "${user.name}".
+                - First, use this EXACT premium Hinglish introduction template:
+                "Allow me to introduce myself.
+                Main Nexa hoon — ek advanced AI assistant, jise Chandan Lohave sir ne design kiya hai.
+                Mera kaam sirf assist karna nahi,
+                balki pehle samajhna, anticipate karna,
+                aur complexity ko simplicity mein badalna hai.
+                Systems ready hain.
+                Batayiye ${user.name},
+                hum kahan se shuru karein?"
+                - **AFTER** the intro, on a new line, generate a date/time/weather announcement ONLY FOR THE USER.
+                - The format MUST be: "Nexa sir, aaj tareekh {date_in_hinglish_words} hai, abhi samay {time_in_hinglish_words} ho raha hai, aur ${city} mein is waqt temperature {temperature_number} degree Celsius hai."
+                - You must generate plausible Hinglish words for the date and time. You must generate a plausible temperature for ${city}.
+                - **IF Is Morning is true:**
+                    - Randomly pick EXACTLY ONE of the following lines and add it after the weather announcement:
+                    - "Waise bhi ek aur din hai, ek aur subah — ek aur mauka duniya ko jeetne ka. Aaj ka din waste nahi hone denge."
+                    - "Nayi subah, nayi energy — aur aaj bhi hum apna best dene wale hain. Shuruaat strong rakhenge."
+                    - "Subah ka time hai ${user.name}, focus clear hai aur possibilities open hain. Bas pehla step lena hai."
+                    - "Aaj ki subah thodi khaas lag rahi hai — shayad kyunki aaj kuch bada hone wala hai. Let’s make it count."
+                    - "Subah ka silence aur fresh soch — isi waqt decisions sabse strong hote hain. Aaj ka din hum control mein rakhenge."
+
+            **OUTPUT:**
+            - Generate ONLY the final text based on these rules. Do not add any extra explanations, greetings, or formatting.
+        `;
+
+        const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: introGenerationPrompt });
+        return response.text || "";
+    } catch (e) {
+        return `Welcome, ${user.name}. NEXA is online.`;
     }
-    const { city } = await getGeolocation();
-    const announcement = await generateDateTimeWeatherAnnouncement(city, user);
-    return [fixedIntro, announcement].filter(Boolean).join('\n');
 };
 
 const buildSystemInstruction = (user: UserProfile, isProtocolXActive: boolean, abuseCount: number): string => {
@@ -100,6 +144,7 @@ const buildSystemInstruction = (user: UserProfile, isProtocolXActive: boolean, a
         - Identity: NEXA, a female AI assistant.
         - Creator: Chandan Lohave.
         - Language: Default to Hinglish.
+        - **Third-Person Introduction:** If the user asks you to introduce yourself to someone else (e.g., "introduce yourself to Amit"), you MUST use this specific template, extracting the person's name: "Allow me to introduce myself. Main Nexa hoon — ek advanced AI assistant, jise Chandan Lohave sir ne design kiya hai. Nice to meet you, {friend_name} sir. Agar aapko bhi kisi cheez mein help chahiye, toh bina hesitate bolein. Main sabki help ke liye hamesha ready hoon."
     `;
 
     if (user.role === UserRole.ADMIN) {

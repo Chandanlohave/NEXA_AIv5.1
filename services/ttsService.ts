@@ -26,12 +26,6 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
   return buffer;
 }
 
-// Function to enforce pronunciation rules for speech
-const applyPronunciationRules = (text: string): string => {
-    // Rule: "Lohave" must be pronounced "लोहवे"
-    return text.replace(/Lohave/gi, 'लोहवे');
-};
-
 export const speak = async (user: UserProfile, text: string, onStart: () => void, onEnd: (error?: string) => void) => {
     if (currentSource) { currentSource.stop(); currentSource = null; }
 
@@ -44,11 +38,15 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
         return;
     }
 
+    // CRITICAL: Pronunciation Override
+    // We replace "Lohave" with "लोहवे" ONLY for the audio generation prompt.
+    // This forces the TTS model to pronounce it with the correct Hindi accent,
+    // while the visual text on screen remains "Lohave".
+    const textForSpeech = text.replace(/Lohave/gi, "लोहवे");
+
     const ctx = getAudioContext();
     try {
         const ai = new GoogleGenAI({ apiKey });
-
-        const textForSpeech = applyPronunciationRules(text);
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
