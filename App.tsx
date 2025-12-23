@@ -27,7 +27,56 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
 
 const StatusBar = ({ userName, onLogout, onSettings, latency, onStudyHub }: any) => ( <div className="w-full h-16 shrink-0 flex justify-between items-center px-6 border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative"><div className="flex items-center gap-4"><div className="flex flex-col items-start"><div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">{userName}</div><div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div></div>{latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-4">LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)}</div><div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none"><div className="text-xl font-bold tracking-[0.3em] text-zinc-900 dark:text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div><div className="flex items-center gap-4"><button onClick={onStudyHub} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative"><StudyIcon /><span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">STUDY HUB</span></button><button onClick={onSettings} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors"><GearIcon /></button><button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button></div></div> );
 const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, onToggleKeyboard, isKeyboardOpen }: any) => { const isListening = hudState === HUDState.LISTENING, isWarning = hudState === HUDState.WARNING, isProtect = hudState === HUDState.PROTECT, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING, isStudyHub = hudState === HUDState.STUDY_HUB, isLateNight = hudState === HUDState.LATE_NIGHT; let baseDuration = 8; if (isThinking) baseDuration = 2; else if (isSpeaking || isListening) baseDuration = 4; else if (isWarning || isProtect) baseDuration = 0.5; else if (isStudyHub) baseDuration = 6; else if (isLateNight) baseDuration = 12; const finalDuration = `${baseDuration / rotationSpeedMultiplier}s`; const buttonScale = (isListening || isWarning || isProtect || isThinking || isLateNight) ? 'scale-110' : 'hover:scale-105 active:scale-95'; let iconColorClass = 'text-nexa-cyan'; if (isListening || isWarning || isProtect) iconColorClass = 'text-nexa-red'; else if (isThinking) iconColorClass = 'text-nexa-yellow'; else if (isStudyHub) iconColorClass = 'text-nexa-blue'; else if (isLateNight) iconColorClass = 'text-purple-400'; const pulseClass = (isListening || isWarning || isProtect || isThinking || isStudyHub || isLateNight) ? 'animate-pulse' : ''; return ( <div className="w-full h-24 shrink-0 bg-gradient-to-t from-zinc-100 via-zinc-100/80 to-transparent dark:from-black dark:via-black/80 dark:to-transparent z-40 relative flex items-center justify-center"><div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4 pointer-events-none"><div className="w-full h-full flex justify-between items-center relative"><div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div><div className="w-24 flex-shrink-0"></div><div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40 relative"><div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-auto"><button onClick={onToggleKeyboard} className={`w-4 h-4 rotate-45 border ${isKeyboardOpen ? 'bg-nexa-cyan border-nexa-cyan shadow-[0_0_10px_rgba(41,223,255,0.8)]' : 'bg-black border-nexa-cyan/50 hover:border-nexa-cyan hover:shadow-[0_0_8px_rgba(41,223,255,0.5)]'} transition-all duration-300`}></button></div></div></div></div><button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''}`}><div className="absolute inset-0 rounded-full bg-white dark:bg-black shadow-inner"></div><div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}><div className="scale-[1.4]"><MicIcon rotationDuration={finalDuration} /></div></div></button></div> ); };
-const KeyboardInput = ({ onSend, disabled, variant = 'cyan', isVisible }: any) => { const [text, setText] = useState(''); const borderColor = variant === 'red' ? 'border-red-500/30 focus:border-red-500' : 'border-nexa-cyan/30 focus:border-nexa-cyan'; const textColor = variant === 'red' ? 'text-red-500 placeholder-red-500/30' : 'text-nexa-cyan placeholder-nexa-cyan/30'; const btnColor = variant === 'red' ? 'text-red-500' : 'text-nexa-cyan'; const bgFocus = variant === 'red' ? 'group-focus-within:shadow-[0_0_15px_rgba(220,38,38,0.3)]' : 'group-focus-within:shadow-[0_0_15px_rgba(41,223,255,0.3)]'; const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!text.trim() || disabled) return; onSend(text, 'text'); setText(''); }; if (!isVisible) return null; return ( <form onSubmit={handleSubmit} className="w-full px-6 pb-2 z-50 relative shrink-0 animate-slide-up"><div className={`relative flex items-center group ${bgFocus} rounded-full transition-shadow duration-300`}><div className={`absolute inset-0 bg-white/5 dark:bg-black/40 rounded-full blur-sm transition-all`}></div><input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder={disabled ? "PROCESSING..." : "COMMAND INTERFACE..."} disabled={disabled} className={`relative w-full bg-white/10 dark:bg-black/60 border ${borderColor} rounded-full px-5 py-3 pr-12 text-sm font-mono ${textColor} focus:outline-none transition-all shadow-sm backdrop-blur-md uppercase tracking-wider disabled:opacity-50`} /><button type="submit" disabled={!text.trim() || disabled} className={`absolute right-3 p-2 ${btnColor} hover:brightness-150 disabled:opacity-30 transition-all`}><svg className="w-5 h-5 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" /></svg></button></div></form> ); };
+
+// UPDATED: High Visibility Keyboard Input
+const KeyboardInput = ({ onSend, disabled, variant = 'cyan', isVisible }: any) => { 
+  const [text, setText] = useState(''); 
+  const isRed = variant === 'red';
+  
+  // High contrast styles for better visibility
+  const borderColor = isRed 
+    ? 'border-red-500/80 focus:border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] focus:shadow-[0_0_30px_rgba(220,38,38,0.6)]' 
+    : 'border-nexa-cyan/60 focus:border-nexa-cyan shadow-[0_0_15px_rgba(41,223,255,0.2)] focus:shadow-[0_0_30px_rgba(41,223,255,0.6)]';
+    
+  const textColor = isRed 
+    ? 'text-red-400 placeholder-red-500/60 drop-shadow-[0_0_2px_rgba(220,38,38,0.8)]' 
+    : 'text-nexa-cyan placeholder-nexa-cyan/60 drop-shadow-[0_0_2px_rgba(41,223,255,0.8)]';
+    
+  const btnColor = isRed ? 'text-red-500 drop-shadow-[0_0_5px_currentColor]' : 'text-nexa-cyan drop-shadow-[0_0_5px_currentColor]';
+  
+  // Darker background for pop
+  const inputBg = 'bg-zinc-950/95 dark:bg-black/95';
+
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!text.trim() || disabled) return; onSend(text, 'text'); setText(''); }; 
+  
+  if (!isVisible) return null; 
+  
+  return ( 
+    <form onSubmit={handleSubmit} className="w-full px-4 pb-4 z-50 relative shrink-0 animate-slide-up">
+        <div className={`relative flex items-center group rounded-full transition-all duration-300 ${isRed ? 'hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'hover:shadow-[0_0_20px_rgba(41,223,255,0.3)]'}`}>
+            {/* Background Blur Layer */}
+            <div className={`absolute inset-0 rounded-full blur-md transition-all opacity-60 ${isRed ? 'bg-red-900/60' : 'bg-nexa-cyan/30'}`}></div>
+            
+            <input 
+                type="text" 
+                value={text} 
+                onChange={(e) => setText(e.target.value)} 
+                placeholder={disabled ? "PROCESSING..." : (isRed ? "COMMAND OVERRIDE..." : "ENTER COMMAND...")} 
+                disabled={disabled} 
+                className={`relative w-full ${inputBg} border-2 ${borderColor} rounded-full px-6 py-4 pr-14 text-lg font-mono ${textColor} focus:outline-none transition-all uppercase tracking-widest disabled:opacity-50 font-bold`} 
+            />
+            
+            <button 
+                type="submit" 
+                disabled={!text.trim() || disabled} 
+                className={`absolute right-3 p-3 rounded-full ${btnColor} hover:bg-white/10 active:scale-95 disabled:opacity-30 transition-all z-10`}
+            >
+                <svg className="w-6 h-6 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 19V5m0 0l-7 7m7-7l7 7" /></svg>
+            </button>
+        </div>
+    </form> 
+  ); 
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);

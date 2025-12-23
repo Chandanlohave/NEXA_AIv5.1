@@ -49,7 +49,11 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
 
 const CyberButton = ({ onClick, label, secondary = false, loading = false, icon = null }: any) => (
   <button
-    onClick={onClick}
+    onClick={async () => {
+        // Unlock audio on any button click
+        await initGlobalAudio();
+        onClick();
+    }}
     disabled={loading}
     className={`
       w-full py-4 px-6 font-bold tracking-[0.3em] uppercase transition-all duration-300 z-50 cursor-pointer clip-corner relative z-20 flex items-center justify-center gap-3 group
@@ -117,6 +121,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   };
 
   const handlePowerUpClick = async () => {
+    // CRITICAL: Unlock audio on first interaction
     await initGlobalAudio();
     playStartupSound();
     setLoading(true);
@@ -145,7 +150,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
     }
   };
 
-  const handleAdminLogin = () => {
+  const handleAdminLogin = async () => {
+    // Unlock audio here too just in case
+    await initGlobalAudio();
+    
     if (!process.env.API_KEY || process.env.API_KEY === 'undefined' || process.env.API_KEY.trim() === '') {
       playErrorSound();
       setError('// ERROR: ADMIN API KEY NOT CONFIGURED');
@@ -161,7 +169,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
     }
   };
 
-  const handleUserCreate = () => {
+  const handleUserCreate = async () => {
+    await initGlobalAudio();
     if (!formData.name.trim()) {
         playErrorSound();
         setError('// ERROR: NAME REQUIRED');
@@ -184,6 +193,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   };
 
   const handleUserKeySubmit = async () => {
+    await initGlobalAudio();
     if (!stagedProfile) {
         setError('// FATAL ERROR: STAGED PROFILE MISSING');
         return;
@@ -206,6 +216,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   };
   
   const switchToAdmin = () => {
+    initGlobalAudio();
     playErrorSound();
     setMode('ADMIN');
   };

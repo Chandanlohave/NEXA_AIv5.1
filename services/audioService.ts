@@ -10,7 +10,7 @@ export const getAudioContext = (): AudioContext => {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         globalAudioCtx = new AudioContextClass({ 
             latencyHint: 'interactive',
-            // We let the browser choose the sample rate (usually 44100 or 48000) to prevent hardware crashes
+            sampleRate: 24000 // Force 24kHz to match Gemini output if possible, reduces resampling artifacts
         });
     }
     return globalAudioCtx!;
@@ -22,17 +22,28 @@ export const getAudioContext = (): AudioContext => {
  */
 export const initGlobalAudio = async () => {
     const ctx = getAudioContext();
+    
+    // 1. Resume Context
     if (ctx.state === 'suspended') {
-        await ctx.resume();
+        try {
+            await ctx.resume();
+        } catch (e) {
+            console.error("Audio resume failed during init", e);
+        }
     }
     
-    // Play a silent buffer. This tricks iOS/Android into thinking audio has started,
-    // keeping the channel open for the AI voice later.
-    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
+    // 2. Play a Silent Buffer (The "Mobile Unlock" Trick)
+    // We play a very short buffer of 0.1s to force the audio hardware to wake up.
+    try {
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+        console.log("NEXA Core: Audio Engine Unlocked");
+    } catch (e) {
+        console.error("Audio unlock buffer failed", e);
+    }
 };
 
 // Helper to play sounds
