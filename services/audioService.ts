@@ -3,6 +3,8 @@
 // SINGLETON AUDIO CONTEXT FOR THE WHOLE APP
 // This ensures SFX and TTS share the same "unlocked" state.
 let globalAudioCtx: AudioContext | null = null;
+let angerEffectNode: { source: AudioBufferSourceNode, gain: GainNode } | null = null;
+
 
 export const getAudioContext = (): AudioContext => {
     if (!globalAudioCtx && typeof window !== 'undefined') {
@@ -287,6 +289,49 @@ export const playSystemNotificationSound = () => {
         osc2.stop(now + 0.1);
         return [gain, gain2];
     });
+};
+
+export const playAngerEffect = () => {
+    if (angerEffectNode) return; // Already playing
+    play((ctx, now) => {
+        const source = ctx.createBufferSource();
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); // 2 second buffer for loop
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = Math.random() * 2 - 1; // white noise
+        }
+        source.buffer = buffer;
+        source.loop = true;
+
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 80; // deep rumble
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.15, now + 0.5); // fade in
+
+        source.connect(lowpass);
+        lowpass.connect(gain);
+        
+        source.start(now);
+        angerEffectNode = { source, gain };
+
+        return [gain];
+    });
+};
+
+export const stopAngerEffect = () => {
+    if (angerEffectNode) {
+        const { source, gain } = angerEffectNode;
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.5);
+        source.stop(now + 0.5);
+        angerEffectNode = null;
+    }
 };
 
 const noteFrequencies: { [note: string]: number } = {

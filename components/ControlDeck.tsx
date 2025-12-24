@@ -19,42 +19,49 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, onTogg
     const isSpeaking = hudState === HUDState.SPEAKING;
     const isStudyHub = hudState === HUDState.STUDY_HUB;
     const isLateNight = hudState === HUDState.LATE_NIGHT;
+    const isAngry = isWarning || isProtect;
 
     let baseDuration = 8;
     if (isThinking) baseDuration = 2;
     else if (isSpeaking || isListening) baseDuration = 4;
-    else if (isWarning || isProtect) baseDuration = 0.5;
+    else if (isAngry) baseDuration = 0.5;
     else if (isStudyHub) baseDuration = 6;
     else if (isLateNight) baseDuration = 12; // Very slow for late night mode
 
     const finalDuration = `${baseDuration / rotationSpeedMultiplier}s`;
     
-    const buttonScale = (isListening || isWarning || isProtect || isThinking || isLateNight) ? 'scale-110' : 'hover:scale-105 active:scale-95';
+    const buttonScale = (isListening || isAngry || isThinking || isLateNight) ? 'scale-110' : 'hover:scale-105 active:scale-95';
     
     let iconColorClass = 'text-nexa-cyan';
-    if (isListening || isWarning || isProtect) iconColorClass = 'text-nexa-red';
+    if (isListening || isAngry) iconColorClass = 'text-nexa-red';
     else if (isThinking) iconColorClass = 'text-nexa-yellow';
     else if (isStudyHub) iconColorClass = 'text-nexa-blue';
     else if (isLateNight) iconColorClass = 'text-purple-400';
     
-    const pulseClass = (isListening || isWarning || isProtect || isThinking || isStudyHub || isLateNight) ? 'animate-pulse' : '';
+    const pulseClass = (isListening || isAngry || isThinking || isStudyHub || isLateNight) ? 'animate-pulse' : '';
+    
+    const shadowClass = isListening ? 'shadow-[0_0_35px_currentColor]' : 'shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]';
+    const lineColor = isAngry ? 'dark:via-nexa-red/30 dark:to-nexa-red/50' : 'dark:via-nexa-cyan/20 dark:to-nexa-cyan/40';
+    const keyboardButtonClass = isKeyboardOpen
+      ? (isAngry ? 'bg-nexa-red border-nexa-red shadow-[0_0_10px_rgba(255,42,42,0.8)]' : 'bg-nexa-cyan border-nexa-cyan shadow-[0_0_10px_rgba(41,223,255,0.8)]')
+      : (isAngry ? 'bg-black border-nexa-red/50 hover:border-nexa-red hover:shadow-[0_0_8px_rgba(255,42,42,0.5)]' : 'bg-black border-nexa-cyan/50 hover:border-nexa-cyan hover:shadow-[0_0_8px_rgba(41,223,255,0.5)]');
 
     return (
         <div className="w-full h-24 shrink-0 bg-gradient-to-t from-zinc-100 via-zinc-100/80 to-transparent dark:from-black dark:via-black/80 dark:to-transparent z-40 relative flex items-center justify-center">
             {/* Supply Lines & Diamond Trigger */}
             <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4 pointer-events-none">
                 <div className="w-full h-full flex justify-between items-center relative">
-                    <div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div>
+                    <div className={`flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 ${lineColor} transition-all duration-300`}></div>
                     
                     {/* Center Gap for Mic Button */}
                     <div className="w-24 flex-shrink-0"></div>
 
                     {/* Right Line with Keyboard Button */}
-                    <div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40 relative">
+                    <div className={`flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 ${lineColor} relative transition-all duration-300`}>
                         <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-auto">
                             <button 
                                 onClick={onToggleKeyboard}
-                                className={`w-4 h-4 rotate-45 border ${isKeyboardOpen ? 'bg-nexa-cyan border-nexa-cyan shadow-[0_0_10px_rgba(41,223,255,0.8)]' : 'bg-black border-nexa-cyan/50 hover:border-nexa-cyan hover:shadow-[0_0_8px_rgba(41,223,255,0.5)]'} transition-all duration-300`}
+                                className={`w-4 h-4 rotate-45 border ${keyboardButtonClass} transition-all duration-300`}
                             ></button>
                         </div>
                     </div>
@@ -63,7 +70,7 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, onTogg
 
             <button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''}`}>
                 <div className="absolute inset-0 rounded-full bg-white dark:bg-black shadow-inner"></div>
-                <div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}><div className="scale-[1.4]"><MicIcon rotationDuration={finalDuration} /></div></div>
+                <div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} ${shadowClass}`}><div className="scale-[1.4]"><MicIcon rotationDuration={finalDuration} /></div></div>
             </button>
         </div>
     );

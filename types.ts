@@ -34,6 +34,7 @@ export interface AppConfig {
   hudRotationSpeed: number;
   micRotationSpeed: number;
   theme: 'light' | 'dark' | 'system';
+  voiceQuality: 'intelligent' | 'hd' | 'standard';
 }
 
 export interface StudyHubSubject {

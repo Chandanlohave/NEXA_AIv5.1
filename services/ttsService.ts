@@ -1,8 +1,11 @@
-import { GoogleGenAI } from "@google/genai";
-import { UserProfile, UserRole } from "../types";
+import { GoogleGenAI, Modality } from "@google/genai";
+import { UserProfile, UserRole, AppConfig } from "../types";
 import { getAudioContext } from "./audioService";
+import { getUserApiKey, getAdminApiKey } from './memoryService';
 
 let currentSource: AudioBufferSourceNode | null = null;
+
+const INTELLIGENT_VOICE_WORD_THRESHOLD = 5;
 
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
@@ -27,10 +30,10 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
 }
 
 // FALLBACK: Use Device's Built-in TTS (Robotic but Reliable)
-const speakNative = (text: string, onStart: () => void, onEnd: () => void) => {
-    console.warn("TTS: Switching to Native Fallback");
+const speakNative = (text: string, onStart: (duration: number) => void, onEnd: () => void) => {
+    console.warn("TTS: Using Native Fallback (Standard Voice)");
     if (!window.speechSynthesis) {
-        onStart();
+        onStart(text.length * 0.1); // Estimate duration
         setTimeout(onEnd, 2000); 
         return;
     }
@@ -48,13 +51,20 @@ const speakNative = (text: string, onStart: () => void, onEnd: () => void) => {
 
     if (preferredVoice) utterance.voice = preferredVoice;
     
-    // Tweak to sound slightly more feminine/young if possible
     utterance.pitch = 1.1; 
     utterance.rate = 1.0; 
 
-    utterance.onstart = () => onStart();
+    utterance.onstart = () => onStart(text.length * 0.1); // Estimate duration
     utterance.onend = () => onEnd();
-    utterance.onerror = (e) => { console.error("Native TTS Error", e); onEnd(); };
+    utterance.onerror = (e: any) => { 
+        // FIX: Ignore 'interrupted' or 'canceled' errors as they are expected when stopping speech explicitly.
+        if (e.error === 'interrupted' || e.error === 'canceled') {
+            onEnd();
+            return;
+        }
+        console.error("Native TTS Error:", e.error, e); 
+        onEnd(); 
+    };
 
     window.speechSynthesis.speak(utterance);
 };
@@ -65,22 +75,17 @@ const generateSpeechWithRetry = async (ai: GoogleGenAI, params: any, retries = 1
         return await ai.models.generateContent(params);
     } catch (e: any) {
         if (retries > 0) {
-            await new Promise(r => setTimeout(r, 800)); 
+            console.log(`TTS API call failed, retrying... (${retries} left)`);
+            await new Promise(r => setTimeout(r, 1000));
             return await generateSpeechWithRetry(ai, params, retries - 1);
         }
         throw e;
     }
 };
 
-export const speak = async (user: UserProfile, text: string, onStart: () => void, onEnd: (error?: string) => void) => {
+export const speak = async (user: UserProfile, text: string, config: AppConfig, onStart: (audioDuration: number) => void, onEnd: (error?: string) => void, isAngry: boolean = false) => {
     // 1. Stop previous audio (Gemini or Native)
-    if (currentSource) { 
-        try { currentSource.stop(); } catch(e) {}
-        currentSource = null; 
-    }
-    if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-    }
+    stop();
     
     if (!text || text.trim().length === 0) {
         onEnd();
@@ -98,23 +103,44 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
         return;
     }
 
-    // --- API KEY CHECK ---
-    let apiKey: string | null | undefined;
-    if (user.role === UserRole.ADMIN) {
-        apiKey = localStorage.getItem('nexa_admin_api_key');
-        if (!apiKey || apiKey.trim() === '') apiKey = process.env.API_KEY;
+    // --- SMART VOICE SELECTION LOGIC ---
+    if (isAngry) {
+        // If angry, always use HD voice to capture emotion, override intelligent setting.
+        console.log("TTS: Angry mode, forcing HD voice.");
     } else {
-        apiKey = localStorage.getItem(`nexa_client_api_key_${user.mobile}`);
+        if (config.voiceQuality === 'standard') {
+            speakNative(textForSpeech, onStart, onEnd);
+            return;
+        }
+        if (config.voiceQuality === 'intelligent' && textForSpeech.split(' ').length <= INTELLIGENT_VOICE_WORD_THRESHOLD) {
+            console.log(`TTS: Intelligent mode chose Standard voice for short response (${textForSpeech.split(' ').length} words).`);
+            speakNative(textForSpeech, onStart, onEnd);
+            return;
+        }
+    }
+    
+    if (isAngry) {
+        textForSpeech = `Say furiously and with a stern, commanding tone: ${textForSpeech}`;
     }
 
-    // If no key, failover immediately to Native TTS
+    // --- ROBUST API KEY RETRIEVAL ---
+    let apiKey: string | null | undefined;
+    if (user.role === UserRole.ADMIN) {
+        apiKey = getAdminApiKey();
+        if (!apiKey || apiKey.trim() === "") {
+            apiKey = process.env.API_KEY;
+        }
+    } else {
+        apiKey = getUserApiKey(user);
+    }
+
     if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
+        console.warn("HD Voice failed: API Key missing. Falling back to Standard Voice.");
         speakNative(textForSpeech, onStart, onEnd);
         return;
     }
 
     const ctx = getAudioContext();
-    // Ensure AudioContext is running (Mobile Unlock)
     if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch (e) { console.error("TTS: Audio resume failed", e); }
     }
@@ -126,8 +152,8 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
             model: "gemini-2.5-flash-preview-tts",
             contents: [{ parts: [{ text: textForSpeech }] }],
             config: {
-                responseModalities: ['AUDIO' as any], 
-                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+                responseModalities: [Modality.AUDIO], 
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
             },
         });
 
@@ -145,19 +171,19 @@ export const speak = async (user: UserProfile, text: string, onStart: () => void
         source.connect(ctx.destination);
         source.onended = () => { onEnd(); currentSource = null; };
         
-        onStart(); 
+        onStart(audioBuffer.duration); 
         source.start();
         currentSource = source;
 
     } catch (e: any) {
-        console.warn(`Gemini TTS Failed (${e.message}), switching to Native Fallback.`);
-        // CRITICAL FALLBACK: Use Native Browser TTS
+        console.warn(`Gemini TTS (HD Voice) Failed (${e.message}), switching to Standard Voice Fallback.`);
         speakNative(textForSpeech, onStart, onEnd);
     }
 };
 
 export const stop = (): void => {
     if (currentSource) { 
+        currentSource.onended = null;
         try { currentSource.stop(); } catch(e) {}
         currentSource = null; 
     }
@@ -166,4 +192,73 @@ export const stop = (): void => {
     }
 };
 
-export const speakIntro = speak;
+export const speakIntro = async (user: UserProfile, text: string, config: AppConfig, onStart: (duration: number) => void, onEnd: (error?: string) => void) => {
+    // This function is a streamlined version of speak() specifically for the intro,
+    // to ensure it always attempts the highest quality voice first with retries.
+    stop(); // Stop any previous audio
+
+    if (!text || text.trim().length === 0) {
+        onEnd();
+        return;
+    }
+    
+    // Pronunciation fixes for intro
+    let textForSpeech = text.replace(/Lohave/gi, 'लोहवे'); 
+    textForSpeech = textForSpeech.replace(/Chandan/gi, 'चंदन');
+
+    let apiKey: string | null | undefined;
+    if (user.role === UserRole.ADMIN) {
+        apiKey = getAdminApiKey();
+        if (!apiKey || apiKey.trim() === "") {
+            apiKey = process.env.API_KEY;
+        }
+    } else {
+        apiKey = getUserApiKey(user);
+    }
+
+    if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
+        console.warn("Intro TTS: API Key missing. Falling back to Standard Voice.");
+        speakNative(textForSpeech, onStart, onEnd);
+        return;
+    }
+
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch (e) { console.error("Intro TTS: Audio resume failed", e); }
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await generateSpeechWithRetry(ai, {
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: textForSpeech }] }],
+            config: {
+                responseModalities: [Modality.AUDIO], 
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+            },
+        }, 2); // 2 retries specifically for the intro
+
+        const candidate = response.candidates?.[0];
+        if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+             throw new Error(`API Finish Reason: ${candidate.finishReason}`);
+        }
+
+        const base64Audio = candidate?.content?.parts?.[0]?.inlineData?.data;
+        if (!base64Audio) throw new Error("No audio data in Gemini response");
+
+        const audioBytes = decodeBase64(base64Audio);
+        const audioBuffer = await decodePcmAudioData(audioBytes, ctx);
+        
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        source.onended = () => { onEnd(); currentSource = null; };
+        
+        onStart(audioBuffer.duration); 
+        source.start();
+        currentSource = source;
+    } catch (e: any) {
+        console.warn(`Intro TTS (HD Voice) Failed: ${e.message}. Switching to Standard Voice Fallback.`);
+        speakNative(textForSpeech, onStart, onEnd);
+    }
+};

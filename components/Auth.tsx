@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound, initGlobalAudio } from '../services/audioService';
 import InstallPWAButton from './InstallPWAButton';
-import { syncUserProfile } from '../services/memoryService';
+import { syncUserProfile, saveUserApiKey, getAllUserProfiles } from '../services/memoryService';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
@@ -81,14 +81,15 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
 
 
 const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, savedUserName = '' }) => {
-  const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'USER_KEY_INPUT'>('INIT');
+  const [mode, setMode] = useState<'INIT' | 'USER_SELECT' | 'USER_CREATE' | 'ADMIN' | 'USER_KEY_INPUT'>('INIT');
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   
   const [formData, setFormData] = useState({
     name: '',
     mobile: '', 
     gender: 'male',
     username: '', 
-    password: '', 
+    password: '',
     customApiKey: ''
   });
   const [stagedProfile, setStagedProfile] = useState<UserProfile | null>(null);
@@ -97,23 +98,27 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   const [error, setError] = useState('');
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
   const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP TO CONNECT');
+  
+  useEffect(() => {
+    // This effect runs once on mount to check for existing profiles.
+    const existingProfiles = getAllUserProfiles();
+    setProfiles(existingProfiles);
+  }, []);
 
   useEffect(() => {
     const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_USER', 'NEXA_PROTOCOL'];
     const statusTexts = ['CALIBRATING...', 'INITIALIZING CORE...', 'AWAITING INPUT...'];
     let headerInterval: any, statusInterval: any;
 
-    if (mode === 'INIT') {
+    if (mode === 'INIT' && !isResuming && profiles.length === 0) {
       headerInterval = setInterval(() => setGlitchText(headerTexts[Math.floor(Math.random() * headerTexts.length)]), 2000);
-      if (!isResuming) {
-        statusInterval = setInterval(() => setInitStatusText(statusTexts[Math.floor(Math.random() * statusTexts.length)]), 2500);
-      }
+      statusInterval = setInterval(() => setInitStatusText(statusTexts[Math.floor(Math.random() * statusTexts.length)]), 2500);
     } else {
       setGlitchText('ACCESS_GATEWAY');
     }
 
     return () => { clearInterval(headerInterval); clearInterval(statusInterval); };
-  }, [mode, isResuming]);
+  }, [mode, isResuming, profiles]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -127,31 +132,22 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
     setLoading(true);
 
     if (isResuming && onResume) {
-        const savedUserRaw = localStorage.getItem('nexa_user');
-        if (savedUserRaw) {
-            const savedUser = JSON.parse(savedUserRaw) as UserProfile;
-            const userKey = localStorage.getItem(`nexa_client_api_key_${savedUser.mobile}`);
-
-            if (savedUser.role === UserRole.USER && !userKey) {
-                setStagedProfile(savedUser);
-                setMode('USER_KEY_INPUT');
-                setLoading(false);
-                return;
-            }
-        }
-
         setInitStatusText('RESTORING SESSION...');
-        setTimeout(() => {
-            onResume(); 
-        }, 1000);
+        setTimeout(() => { onResume(); }, 1000);
     } else {
-        setInitStatusText('AUTHENTICATING...');
-        setTimeout(() => { setLoading(false); setMode('USER_CREATE'); }, 1500);
+        setInitStatusText('SCANNING PROFILES...');
+        setTimeout(() => {
+            setLoading(false);
+            if (profiles.length > 0) {
+                setMode('USER_SELECT');
+            } else {
+                setMode('USER_CREATE');
+            }
+        }, 1500);
     }
   };
 
   const handleAdminLogin = async () => {
-    // Unlock audio here too just in case
     await initGlobalAudio();
     
     if (!process.env.API_KEY || process.env.API_KEY === 'undefined' || process.env.API_KEY.trim() === '') {
@@ -188,27 +184,25 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
          role: UserRole.USER,
          gender: formData.gender as 'male' | 'female' | 'other'
     };
+    
     setStagedProfile(profile);
     setMode('USER_KEY_INPUT');
   };
-
+  
   const handleUserKeySubmit = async () => {
-    await initGlobalAudio();
-    if (!stagedProfile) {
-        setError('// FATAL ERROR: STAGED PROFILE MISSING');
-        return;
+    if (!stagedProfile) return;
+    if (!formData.customApiKey.trim()) {
+      playErrorSound();
+      setError('// ERROR: API KEY IS REQUIRED');
+      return;
     }
-    if (formData.customApiKey.trim().length < 10) {
-        playErrorSound();
-        setError('// ERROR: INVALID API KEY FORMAT');
-        return;
-    }
+
     setLoading(true);
-    localStorage.setItem(`nexa_client_api_key_${stagedProfile.mobile}`, formData.customApiKey.trim());
     await syncUserProfile(stagedProfile);
+    saveUserApiKey(stagedProfile, formData.customApiKey.trim());
     completeLogin(stagedProfile);
   };
-  
+
   const completeLogin = (profile: UserProfile) => {
     setLoading(true);
     profile.role === UserRole.ADMIN ? playAdminLoginSound() : playUserLoginSound();
@@ -253,26 +247,29 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                   </div>
               </div>
               <div className="mt-10 text-nexa-cyan font-mono text-[10px] tracking-[0.5em] animate-pulse uppercase">
-                  {isResuming ? 'Verify Biometrics' : initStatusText}
+                  {isResuming ? `WELCOME BACK, ${savedUserName}` : initStatusText}
               </div>
-              
-              {isResuming && (
-                  <button 
-                    onClick={() => {
-                        localStorage.removeItem('nexa_user');
-                        const savedUserRaw = localStorage.getItem('nexa_user');
-                        if (savedUserRaw) {
-                            const savedUser = JSON.parse(savedUserRaw);
-                            localStorage.removeItem(`nexa_client_api_key_${savedUser.mobile}`);
-                        }
-                        window.location.reload();
-                    }}
-                    className="mt-8 text-[9px] text-zinc-600 dark:text-zinc-500 hover:text-red-500 font-mono tracking-[0.3em] uppercase border-b border-zinc-300 dark:border-zinc-800 hover:border-red-500 transition-all"
-                  >
-                    Switch Identity
-                  </button>
-              )}
             </div>
+          )}
+          
+          {mode === 'USER_SELECT' && (
+             <div className="animate-fade-in" style={{ minHeight: '320px' }}>
+                <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-6 tracking-[0.3em] uppercase">Select Profile</div></div>
+                <div className="space-y-3 max-h-[180px] overflow-y-auto no-scrollbar pr-2">
+                    {profiles.map(p => (
+                        <button key={p.mobile} onClick={() => completeLogin(p)} className="w-full text-left p-3 border border-nexa-cyan/20 bg-nexa-cyan/5 hover:bg-nexa-cyan/10 hover:border-nexa-cyan/50 transition-colors">
+                           <div className="text-white font-bold tracking-wider">{p.name}</div>
+                           <div className="text-nexa-cyan/60 font-mono text-xs">{p.mobile}</div>
+                        </button>
+                    ))}
+                </div>
+                <div className="mt-6 border-t border-nexa-cyan/10 pt-4">
+                    <CyberButton onClick={() => setMode('USER_CREATE')} label="+ Create New Profile" secondary />
+                </div>
+                 <div className="pt-6 text-center">
+                  <button onClick={switchToAdmin} className="text-[10px] text-zinc-500/60 dark:text-zinc-500/40 hover:text-red-500 font-mono tracking-widest uppercase transition-colors">Admin_OS</button>
+              </div>
+             </div>
           )}
 
           {mode === 'USER_CREATE' && (
@@ -294,33 +291,41 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               </div>
 
               <div className="pt-6">
-                  <CyberButton onClick={handleUserCreate} label="Proceed to Auth" loading={loading} />
+                  <CyberButton onClick={handleUserCreate} label="Next: API Key" loading={loading} />
               </div>
 
               <div className="pt-6 flex justify-between items-center px-1">
-                  <button onClick={() => setMode('INIT')} className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Cancel</button>
+                  <button onClick={() => profiles.length > 0 ? setMode('USER_SELECT') : setMode('INIT')} className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Cancel</button>
                   <button onClick={switchToAdmin} className="text-[10px] text-zinc-500/60 dark:text-zinc-500/40 hover:text-red-500 font-mono tracking-widest uppercase transition-colors">Admin_OS</button>
               </div>
             </div>
           )}
           
           {mode === 'USER_KEY_INPUT' && (
-            <div className="animate-slide-up space-y-4">
-               <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-4 tracking-[0.3em] uppercase">API Key Required</div></div>
-               <p className="text-zinc-600 dark:text-zinc-400 text-[10px] text-center font-mono leading-relaxed tracking-wider px-2">NEXA requires a personal Google Gemini key to operate. This is stored securely on your device.</p>
-               <BracketInput name="customApiKey" placeholder="ENTER YOUR GEMINI KEY" type="password" className="password-hidden" value={formData.customApiKey} onChange={handleChange} autoFocus />
-               <div className="pt-6">
-                   <CyberButton onClick={handleUserKeySubmit} label="Authorize & Connect" loading={loading} />
-               </div>
-               <div className="pt-4 flex justify-between items-center px-1">
-                  <button 
-                      onClick={() => isResuming ? setMode('INIT') : setMode('USER_CREATE')} 
-                      className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"
-                  >
-                      <span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Back
-                  </button>
-                  <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-all">Get API Key</a>
-               </div>
+            <div className="animate-slide-up">
+                <div className="text-center mb-8">
+                    <div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 tracking-[0.3em] uppercase">Connect to Core</div>
+                </div>
+                <p className="text-center text-zinc-600 dark:text-zinc-400 font-mono text-xs mb-2">
+                    Welcome, {stagedProfile?.name}. Provide your Google Gemini API key to activate NEXA. Your key is stored only on this device.
+                </p>
+                <BracketInput name="customApiKey" placeholder="ENTER API KEY" type="password" value={formData.customApiKey} onChange={handleChange} autoFocus className="caret-nexa-cyan" />
+                <div className="text-center -mt-2 mb-6">
+                    <a 
+                        href="https://aistudio.google.com/app/apikey" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-zinc-500 dark:text-nexa-cyan/60 hover:text-nexa-cyan text-xs font-mono tracking-widest uppercase border-b border-dashed border-zinc-500/50 dark:border-nexa-cyan/30 hover:border-nexa-cyan transition-colors"
+                    >
+                        Get Your API Key
+                    </a>
+                </div>
+                <div className="pt-4">
+                    <CyberButton onClick={handleUserKeySubmit} label="Authorize & Connect" loading={loading} />
+                </div>
+                 <div className="pt-8 flex justify-between items-center px-1">
+                  <button onClick={() => setMode('USER_CREATE')} className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Back</button>
+                </div>
             </div>
           )}
 
@@ -339,7 +344,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                 <button onClick={handleAdminLogin} disabled={loading} className="w-full py-5 bg-red-600/90 text-white font-black tracking-[0.4em] hover:bg-red-500 hover:shadow-[0_0_30px_rgba(220,38,38,0.6)] transition-all clip-corner uppercase text-xs" style={{ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }}>
                    {loading ? 'Validating...' : 'Authorize_Link'}
                 </button>
-                <button onClick={() => setMode('USER_CREATE')} className="text-[10px] text-red-500/50 hover:text-red-500 font-mono tracking-widest uppercase transition-all flex items-center justify-center gap-2 w-full group">
+                <button onClick={() => profiles.length > 0 ? setMode('USER_SELECT') : setMode('USER_CREATE')} className="text-[10px] text-red-500/50 hover:text-red-500 font-mono tracking-widest uppercase transition-all flex items-center justify-center gap-2 w-full group">
                    <span className="group-hover:-translate-x-1 transition-transform">{'<<'}</span> Abort Override
                 </button>
               </div>
