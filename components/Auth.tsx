@@ -79,6 +79,43 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
   </button>
 );
 
+// --- REACTOR CORE COMPONENT ---
+const ReactorCore = () => {
+    return (
+        <div className="relative w-40 h-40 flex items-center justify-center group">
+            {/* Outer Glow */}
+            <div className="absolute inset-0 rounded-full bg-nexa-cyan/20 blur-xl animate-pulse"></div>
+            
+            {/* Outer Ring */}
+            <div className="absolute inset-0 rounded-full border-4 border-zinc-800 dark:border-zinc-800 shadow-[0_0_15px_rgba(0,0,0,0.8)]"></div>
+            
+            {/* Rotating Segmented Ring */}
+            <div className="absolute inset-2 rounded-full border border-nexa-cyan/50 border-dashed animate-spin-slow" style={{ animationDuration: '10s' }}></div>
+            
+            {/* Inner Mechanical Ring - ROTATION APPLIED HERE */}
+            <div className="absolute inset-4 rounded-full border-4 border-zinc-900 bg-black flex items-center justify-center animate-spin-reverse-slow" style={{ animationDuration: '8s' }}>
+                {/* Energy Coils (Triangles) */}
+                {[0, 120, 240].map((deg) => (
+                    <div key={deg} className="absolute w-full h-full" style={{ transform: `rotate(${deg}deg)` }}>
+                        <div className="absolute top-1 left-1/2 -translate-x-1/2 w-8 h-8 bg-zinc-800 clip-trapezoid border-b-2 border-nexa-cyan/50"></div>
+                    </div>
+                ))}
+                
+                {/* Core Light Ring */}
+                <div className="absolute inset-8 rounded-full border-2 border-nexa-cyan shadow-[0_0_15px_theme(colors.nexa.cyan)] animate-pulse"></div>
+                
+                {/* Central Light Source */}
+                <div className="w-12 h-12 rounded-full bg-white shadow-[0_0_30px_theme(colors.nexa.cyan)] animate-breathing relative z-10 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-nexa-cyan opacity-50 blur-sm"></div>
+                </div>
+            </div>
+            
+            {/* Holographic Overlay */}
+            <div className="absolute inset-0 rounded-full border border-nexa-cyan/20 opacity-50 pointer-events-none"></div>
+        </div>
+    );
+};
+
 
 const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, savedUserName = '' }) => {
   const [mode, setMode] = useState<'INIT' | 'USER_SELECT' | 'USER_CREATE' | 'ADMIN' | 'USER_KEY_INPUT'>('INIT');
@@ -97,7 +134,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
-  const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP TO CONNECT');
+  const [initStatusText, setInitStatusText] = useState(isResuming ? 'SYSTEM STANDBY' : 'TAP CORE TO CONNECT');
   
   useEffect(() => {
     // This effect runs once on mount to check for existing profiles.
@@ -219,6 +256,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
     <div className="fixed inset-0 bg-zinc-100 dark:bg-black flex flex-col items-center justify-center p-6 z-[60] overflow-hidden transition-colors duration-500">
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
+      <style>{`.clip-trapezoid { clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%); }`}</style>
       
       <div className="absolute top-24 text-center animate-fade-in z-50">
           <div className="text-[10px] text-zinc-600 dark:text-nexa-cyan/50 font-mono tracking-[0.4em] uppercase">{isResuming ? 'Biometric Link Ready' : 'Project NEXA'}</div>
@@ -237,14 +275,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
           
           {mode === 'INIT' && (
             <div className="flex flex-col justify-center items-center pt-4 pb-2 animate-fade-in relative" style={{ minHeight: '320px' }}>
-              <div onClick={handlePowerUpClick} className="relative w-40 h-40 flex items-center justify-center cursor-pointer group">
-                  <div className={`absolute inset-0 rounded-full border border-dashed border-nexa-cyan/30 animate-spin`} style={{animationDuration: '12s'}}></div>
-                  <div className={`absolute inset-4 rounded-full border border-nexa-cyan/10 animate-spin-reverse-slow`} style={{animationDuration: '20s'}}></div>
-                  
-                  <div className={`w-24 h-24 rounded-full bg-nexa-cyan/5 backdrop-blur-md flex flex-col items-center justify-center border border-nexa-cyan/40 shadow-[0_0_30px_rgba(41,223,255,0.2)] group-hover:shadow-[0_0_50px_rgba(41,223,255,0.4)] group-active:scale-95 transition-all duration-500`}>
-                      <div className="text-4xl font-black text-nexa-cyan tracking-tighter drop-shadow-[0_0_12px_theme(colors.nexa.cyan)]">NX</div>
-                      <div className="text-[8px] font-mono text-nexa-cyan/60 tracking-[0.4em] mt-1 uppercase">Active</div>
-                  </div>
+              <div onClick={handlePowerUpClick} className="cursor-pointer transition-transform duration-300 active:scale-95">
+                  <ReactorCore />
               </div>
               <div className="mt-10 text-nexa-cyan font-mono text-[10px] tracking-[0.5em] animate-pulse uppercase">
                   {isResuming ? `WELCOME BACK, ${savedUserName}` : initStatusText}

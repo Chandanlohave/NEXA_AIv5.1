@@ -11,7 +11,7 @@ import CriticalAlert from './components/CriticalAlert';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig } from './types';
 import { generateTextResponseStream, generateIntroductoryMessage, generateAdminBriefing, getHinglishDateTime } from './services/geminiService';
 import { playMicOnSound, playErrorSound, playSystemNotificationSound, playAngerEffect, stopAngerEffect } from './services/audioService';
-import { appendMessageToMemory, clearAllMemory, getLocalMessages, getAdminNotifications, clearAdminNotifications, logAdminNotification, setUserPenitenceStatus, checkUserPenitenceStatus } from './services/memoryService';
+import { appendMessageToMemory, clearAllMemory, getAdminNotifications, clearAdminNotifications, logAdminNotification, setUserPenitenceStatus, checkUserPenitenceStatus } from './services/memoryService';
 import { speak as speakTextTTS, stop as stopTextTTS, speakIntro as speakIntroTTS } from './services/ttsService';
 import ControlDeck from './components/ControlDeck';
 
@@ -100,7 +100,7 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typingMessage, setTypingMessage] = useState<TypingMessage | null>(null);
   const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
-  const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1, micRotationSpeed: 1, theme: 'system', voiceQuality: 'intelligent' });
+  const [config, setConfig] = useState<AppConfig>({ animationsEnabled: true, hudRotationSpeed: 1, micRotationSpeed: 1, theme: 'system', voiceQuality: 'hd' });
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isStudyHubOpen, setIsStudyHubOpen] = useState(false);
@@ -387,7 +387,8 @@ const App: React.FC = () => {
     if (savedUser) { 
         const profile = JSON.parse(savedUser);
         setUser(profile); 
-        setMessages(getLocalMessages(profile));
+        // PRIVACY UPDATE: Do not load previous messages into state visually
+        setMessages([]); 
         if (profile.role === UserRole.USER) setIsInPenitence(checkUserPenitenceStatus(profile));
     }
     const savedConfig = localStorage.getItem('nexa_config');
@@ -419,13 +420,22 @@ const App: React.FC = () => {
     setIsProcessing(true);
     setHudState(HUDState.THINKING);
 
+    // Intro Logic: Generate text, save to memory (Persistence), but play AUDIO ONLY (Privacy).
+    // Do NOT add to 'messages' state.
+
     if (currentUser.role === UserRole.ADMIN) {
         const notifications = await getAdminNotifications();
         if (notifications?.length > 0) {
             const briefingText = await generateAdminBriefing(notifications, currentUser);
             await clearAdminNotifications();
+            // Important: Save to memory so Nexa knows she briefed you
             const briefingMsg: ChatMessage = { role: 'model', text: briefingText, timestamp: Date.now(), isIntro: true };
-            speakTextTTS(currentUser, briefingText, config, (audioDuration) => { setHudState(HUDState.SPEAKING); setTypingMessage({id: briefingMsg.timestamp, fullText: briefingMsg.text, audioDuration}); setMessages(prev => [...prev, briefingMsg]); }, () => { setIsProcessing(false); isProcessingRef.current = false; setHudState(getIdleState()); setTypingMessage(null); });
+            await appendMessageToMemory(currentUser, briefingMsg);
+
+            speakTextTTS(currentUser, briefingText, config, 
+                () => { setHudState(HUDState.SPEAKING); }, 
+                () => { setIsProcessing(false); isProcessingRef.current = false; setHudState(getIdleState()); }
+            );
             return;
         }
     }
@@ -433,12 +443,24 @@ const App: React.FC = () => {
         let introText = await generateIntroductoryMessage(currentUser);
         const introMsg: ChatMessage = { role: 'model', text: introText, timestamp: Date.now(), isIntro: true };
         await appendMessageToMemory(currentUser, introMsg);
-        speakIntroTTS(currentUser, introMsg.text, config, (audioDuration) => { setHudState(HUDState.SPEAKING); setTypingMessage({id: introMsg.timestamp, fullText: introMsg.text, audioDuration}); setMessages(prev => [...prev, introMsg]); }, () => { setIsProcessing(false); isProcessingRef.current = false; setHudState(getIdleState()); setTypingMessage(null); });
+
+        speakIntroTTS(currentUser, introMsg.text, config, 
+            () => { setHudState(HUDState.SPEAKING); }, 
+            () => { setIsProcessing(false); isProcessingRef.current = false; setHudState(getIdleState()); }
+        );
     } catch (e) { console.error("Intro Error", e); setIsProcessing(false); isProcessingRef.current = false; setHudState(getIdleState()); }
   }, [getIdleState, config]);
 
   const handleResumeSession = () => { setIsSessionLocked(false); if (user) setTimeout(() => triggerIntro(user), 500); };
-  const handleLogin = (profile: UserProfile) => { setUser(profile); localStorage.setItem('nexa_user_session', JSON.stringify(profile)); setMessages(getLocalMessages(profile)); if (profile.role === UserRole.USER) setIsInPenitence(checkUserPenitenceStatus(profile)); setIsSessionLocked(false); setTimeout(() => triggerIntro(profile), 500); };
+  const handleLogin = (profile: UserProfile) => { 
+      setUser(profile); 
+      localStorage.setItem('nexa_user_session', JSON.stringify(profile)); 
+      // PRIVACY UPDATE: Do not populate messages from history
+      setMessages([]); 
+      if (profile.role === UserRole.USER) setIsInPenitence(checkUserPenitenceStatus(profile)); 
+      setIsSessionLocked(false); 
+      setTimeout(() => triggerIntro(profile), 500); 
+  };
   
   const handleMicClick = () => {
     if (!recognitionRef.current) return;

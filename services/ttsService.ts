@@ -5,7 +5,8 @@ import { getUserApiKey, getAdminApiKey } from './memoryService';
 
 let currentSource: AudioBufferSourceNode | null = null;
 
-const INTELLIGENT_VOICE_WORD_THRESHOLD = 5;
+// REMOVED: INTELLIGENT_VOICE_WORD_THRESHOLD
+// We now use Gemini TTS for everything to ensure consistent high-quality voice.
 
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
@@ -57,7 +58,6 @@ const speakNative = (text: string, onStart: (duration: number) => void, onEnd: (
     utterance.onstart = () => onStart(text.length * 0.1); // Estimate duration
     utterance.onend = () => onEnd();
     utterance.onerror = (e: any) => { 
-        // FIX: Ignore 'interrupted' or 'canceled' errors as they are expected when stopping speech explicitly.
         if (e.error === 'interrupted' || e.error === 'canceled') {
             onEnd();
             return;
@@ -67,20 +67,6 @@ const speakNative = (text: string, onStart: (duration: number) => void, onEnd: (
     };
 
     window.speechSynthesis.speak(utterance);
-};
-
-// Helper: Retry logic for API calls
-const generateSpeechWithRetry = async (ai: GoogleGenAI, params: any, retries = 1): Promise<any> => {
-    try {
-        return await ai.models.generateContent(params);
-    } catch (e: any) {
-        if (retries > 0) {
-            console.log(`TTS API call failed, retrying... (${retries} left)`);
-            await new Promise(r => setTimeout(r, 1000));
-            return await generateSpeechWithRetry(ai, params, retries - 1);
-        }
-        throw e;
-    }
 };
 
 export const speak = async (user: UserProfile, text: string, config: AppConfig, onStart: (audioDuration: number) => void, onEnd: (error?: string) => void, isAngry: boolean = false) => {
@@ -103,20 +89,10 @@ export const speak = async (user: UserProfile, text: string, config: AppConfig, 
         return;
     }
 
-    // --- SMART VOICE SELECTION LOGIC ---
-    if (isAngry) {
-        // If angry, always use HD voice to capture emotion, override intelligent setting.
-        console.log("TTS: Angry mode, forcing HD voice.");
-    } else {
-        if (config.voiceQuality === 'standard') {
-            speakNative(textForSpeech, onStart, onEnd);
-            return;
-        }
-        if (config.voiceQuality === 'intelligent' && textForSpeech.split(' ').length <= INTELLIGENT_VOICE_WORD_THRESHOLD) {
-            console.log(`TTS: Intelligent mode chose Standard voice for short response (${textForSpeech.split(' ').length} words).`);
-            speakNative(textForSpeech, onStart, onEnd);
-            return;
-        }
+    // Force Standard Voice if explicitly configured, otherwise always try HD first.
+    if (config.voiceQuality === 'standard') {
+        speakNative(textForSpeech, onStart, onEnd);
+        return;
     }
     
     if (isAngry) {
@@ -148,7 +124,8 @@ export const speak = async (user: UserProfile, text: string, config: AppConfig, 
     try {
         const ai = new GoogleGenAI({ apiKey });
 
-        const response = await generateSpeechWithRetry(ai, {
+        // Direct call without retry delay to minimize latency ("Zero Thinking Time")
+        const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
             contents: [{ parts: [{ text: textForSpeech }] }],
             config: {
@@ -193,72 +170,6 @@ export const stop = (): void => {
 };
 
 export const speakIntro = async (user: UserProfile, text: string, config: AppConfig, onStart: (duration: number) => void, onEnd: (error?: string) => void) => {
-    // This function is a streamlined version of speak() specifically for the intro,
-    // to ensure it always attempts the highest quality voice first with retries.
-    stop(); // Stop any previous audio
-
-    if (!text || text.trim().length === 0) {
-        onEnd();
-        return;
-    }
-    
-    // Pronunciation fixes for intro
-    let textForSpeech = text.replace(/Lohave/gi, 'लोहवे'); 
-    textForSpeech = textForSpeech.replace(/Chandan/gi, 'चंदन');
-
-    let apiKey: string | null | undefined;
-    if (user.role === UserRole.ADMIN) {
-        apiKey = getAdminApiKey();
-        if (!apiKey || apiKey.trim() === "") {
-            apiKey = process.env.API_KEY;
-        }
-    } else {
-        apiKey = getUserApiKey(user);
-    }
-
-    if (!apiKey || apiKey === "undefined" || apiKey.trim() === "") {
-        console.warn("Intro TTS: API Key missing. Falling back to Standard Voice.");
-        speakNative(textForSpeech, onStart, onEnd);
-        return;
-    }
-
-    const ctx = getAudioContext();
-    if (ctx.state === 'suspended') {
-        try { await ctx.resume(); } catch (e) { console.error("Intro TTS: Audio resume failed", e); }
-    }
-
-    try {
-        const ai = new GoogleGenAI({ apiKey });
-        const response = await generateSpeechWithRetry(ai, {
-            model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text: textForSpeech }] }],
-            config: {
-                responseModalities: [Modality.AUDIO], 
-                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-            },
-        }, 2); // 2 retries specifically for the intro
-
-        const candidate = response.candidates?.[0];
-        if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
-             throw new Error(`API Finish Reason: ${candidate.finishReason}`);
-        }
-
-        const base64Audio = candidate?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) throw new Error("No audio data in Gemini response");
-
-        const audioBytes = decodeBase64(base64Audio);
-        const audioBuffer = await decodePcmAudioData(audioBytes, ctx);
-        
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(ctx.destination);
-        source.onended = () => { onEnd(); currentSource = null; };
-        
-        onStart(audioBuffer.duration); 
-        source.start();
-        currentSource = source;
-    } catch (e: any) {
-        console.warn(`Intro TTS (HD Voice) Failed: ${e.message}. Switching to Standard Voice Fallback.`);
-        speakNative(textForSpeech, onStart, onEnd);
-    }
+    // Reusing the same robust logic as speak()
+    speak(user, text, config, onStart, onEnd);
 };

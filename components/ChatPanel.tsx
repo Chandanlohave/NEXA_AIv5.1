@@ -11,44 +11,49 @@ interface ChatPanelProps {
 }
 
 const Typewriter: React.FC<{ fullText: string, duration: number, onComplete: () => void, isUser: boolean }> = ({ fullText, duration, onComplete, isUser }) => {
-    const [typedText, setTypedText] = useState('');
+    const [displayedWords, setDisplayedWords] = useState<string[]>([]);
+    const wordsRef = useRef<string[]>(fullText.split(' '));
+    const [isComplete, setIsComplete] = useState(false);
+    
+    // Calculate speed based on word count. 
+    // Average speaking rate is ~130-150 wpm. 
+    // We map the audio duration to the number of words to create a sync effect.
+    const wordCount = wordsRef.current.length;
+    // Calculate MS per word, but clamp it so it's not too slow or too fast visually
+    // If duration is missing (0), default to fast typing.
+    const intervalTime = duration > 0 ? (duration * 1000) / wordCount : 50;
+    
     const textStyle = isUser 
         ? 'text-nexa-blue' 
         : (fullText.includes('himmat kaise hui') ? 'text-nexa-red' : 'text-nexa-cyan');
 
     useEffect(() => {
-        // For very short audio, just show the full text instantly.
-        if (duration < 0.1 || fullText.length === 0) {
-            setTypedText(fullText);
-            onComplete();
-            return;
-        }
+        setDisplayedWords([]);
+        setIsComplete(false);
+        wordsRef.current = fullText.split(' ');
+        let currentWordIndex = 0;
 
-        setTypedText('');
-        let charIndex = 0;
-        // Ensure delay is not excessively fast
-        const charDelay = Math.max(15, (duration * 1000) / fullText.length);
-        
-        const typingInterval = setInterval(() => {
-            if (charIndex < fullText.length - 1) {
-                setTypedText(prev => prev + fullText[charIndex]);
-                charIndex++;
+        const interval = setInterval(() => {
+            if (currentWordIndex < wordsRef.current.length) {
+                setDisplayedWords(prev => [...prev, wordsRef.current[currentWordIndex]]);
+                currentWordIndex++;
             } else {
-                setTypedText(fullText); // Set full text at the end
-                clearInterval(typingInterval);
+                clearInterval(interval);
+                setIsComplete(true);
                 onComplete();
             }
-        }, charDelay);
+        }, intervalTime);
 
-        return () => clearInterval(typingInterval);
-    }, [fullText, duration, onComplete]);
+        return () => clearInterval(interval);
+    }, [fullText, duration, onComplete, intervalTime]);
 
     return (
         <div 
-            className={`whitespace-pre-wrap dark:text-zinc-100 ${textStyle}`}
-            style={{ textShadow: `0 0 5px ${isUser ? 'rgba(0,119,255,0.4)' : 'rgba(41,223,255,0.4)'}` }}
+            className={`whitespace-pre-wrap font-sans font-medium tracking-wide leading-relaxed dark:text-zinc-100 ${textStyle}`}
+            style={{ textShadow: `0 0 10px ${isUser ? 'rgba(0,119,255,0.2)' : 'rgba(41,223,255,0.2)'}` }}
         >
-            {typedText}<span className="inline-block w-2 h-4 bg-current animate-blink opacity-70 ml-1"></span>
+            {displayedWords.join(' ')}
+            {!isComplete && <span className="inline-block w-2 h-4 bg-current animate-blink ml-1 align-middle"></span>}
         </div>
     );
 };
@@ -74,15 +79,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
 
   return (
     <div className="w-full max-w-3xl h-full flex flex-col bg-white/50 dark:bg-black/40 border border-zinc-200 dark:border-nexa-cyan/20 rounded-lg backdrop-blur-md overflow-hidden relative">
-      <div className={`w-full h-6 bg-zinc-100/80 ${headerBgColor} border-b border-zinc-200 ${headerBorderColor} flex items-center justify-between px-3 transition-colors duration-300`}>
-         <div className={`text-[9px] text-zinc-500 ${conversationLogColor} font-mono tracking-widest uppercase flex items-center gap-2 transition-colors duration-300`}>
+      <div className={`w-full h-8 bg-zinc-100/80 ${headerBgColor} border-b border-zinc-200 ${headerBorderColor} flex items-center justify-between px-3 transition-colors duration-300`}>
+         <div className={`text-[10px] text-zinc-500 ${conversationLogColor} font-mono tracking-widest uppercase flex items-center gap-2 transition-colors duration-300`}>
             <span className={`w-1.5 h-1.5 ${isAngry ? 'bg-white' : 'bg-nexa-red'} rounded-full animate-pulse`}></span>
-            /// CONVERSATION_LOG ///
+            /// SECURE_CHANNEL_ESTABLISHED ///
          </div>
-         <div className={`text-[8px] ${isAngry ? 'text-white' : 'text-nexa-red/70'} font-mono transition-colors duration-300`}>LIVE_FEED</div>
+         <div className={`text-[9px] ${isAngry ? 'text-white' : 'text-nexa-red/70'} font-mono transition-colors duration-300`}>LIVE_FEED</div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-5 scroll-smooth no-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scroll-smooth no-scrollbar">
+        {messages.length === 0 && !typingMessage && (
+            <div className="h-full flex flex-col items-center justify-center opacity-30 pointer-events-none">
+                 <div className="text-[10px] font-mono text-nexa-cyan uppercase tracking-[0.5em] mb-2">System Ready</div>
+                 <div className="w-16 h-[1px] bg-nexa-cyan/50"></div>
+            </div>
+        )}
+
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user';
           let label = 'NEXA';
@@ -94,7 +106,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
 
           return (
             <div key={msg.timestamp + idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
-              <div className={`relative max-w-[85%] px-3 py-1.5 font-mono text-sm leading-snug rounded-lg ${isUser ? 'text-right bg-nexa-blue/10' : 'text-left bg-nexa-cyan/5'}`}>
+              <div className={`relative max-w-[85%] px-4 py-2 text-sm md:text-base rounded-lg shadow-sm border ${isUser ? 'text-right bg-nexa-blue/5 border-nexa-blue/20' : 'text-left bg-nexa-cyan/5 border-nexa-cyan/20'}`}>
                 {isCurrentlyTyping ? (
                     <Typewriter 
                         fullText={typingMessage.fullText} 
@@ -104,13 +116,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
                     />
                 ) : (
                     <div 
-                        className={`whitespace-pre-wrap dark:text-zinc-100 ${isUser ? 'text-nexa-blue' : (msg.isAngry ? 'text-nexa-red' : 'text-nexa-cyan')}`}
-                        style={{ textShadow: `0 0 5px ${isUser ? 'rgba(0,119,255,0.4)' : 'rgba(41,223,255,0.4)'}` }}
+                        className={`whitespace-pre-wrap font-sans font-medium tracking-wide leading-relaxed dark:text-zinc-100 ${isUser ? 'text-nexa-blue' : (msg.isAngry ? 'text-nexa-red' : 'text-nexa-cyan')}`}
+                        style={{ textShadow: `0 0 10px ${isUser ? 'rgba(0,119,255,0.2)' : 'rgba(41,223,255,0.2)'}` }}
                     >
                         {msg.text}
                     </div>
                 )}
-                <div className={`text-[8px] uppercase tracking-widest mt-1.5 pt-1 border-t ${isUser ? 'border-nexa-blue/10' : 'border-nexa-cyan/10'} opacity-60 ${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'}`}>
+                <div className={`text-[9px] font-mono uppercase tracking-widest mt-2 pt-1 border-t ${isUser ? 'border-nexa-blue/10' : 'border-nexa-cyan/10'} opacity-60 ${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'}`}>
                    {label} &middot; {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}
                 </div>
               </div>
@@ -123,10 +135,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
             <div className="relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed text-right border-r border-nexa-red/30 bg-nexa-red/5">
               <div className="text-nexa-red flex items-center justify-end gap-2">
                 <div className="inline-flex items-center gap-1"><span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span><span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span><span className="w-1 h-1 bg-nexa-red/70 rounded-full animate-pulse"></span></div>
-                <span>Listening</span>
-              </div>
-              <div className="text-[8px] uppercase tracking-widest mt-1 opacity-50 text-nexa-red">
-                 {(userRole === UserRole.ADMIN ? 'ADMIN' : (userName || 'USER')).toUpperCase()} &middot; CAPTURING
+                <span>LISTENING...</span>
               </div>
             </div>
           </div>
@@ -136,10 +145,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
           <div className="flex justify-start animate-slide-up">
             <div className="relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed text-left border-l border-nexa-yellow/30 bg-nexa-yellow/5">
               <div className="text-nexa-yellow flex items-center gap-2">
-                <span>NEXA is processing</span>
+                <span>PROCESSING...</span>
                 <div className="inline-flex items-center gap-1"><span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse [animation-delay:-0.3s]"></span><span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse [animation-delay:-0.15s]"></span><span className="w-1 h-1 bg-nexa-yellow/70 rounded-full animate-pulse"></span></div>
               </div>
-              <div className="text-[8px] uppercase tracking-widest mt-1 opacity-50 text-nexa-yellow">SYSTEM &middot; THINKING</div>
             </div>
           </div>
         )}

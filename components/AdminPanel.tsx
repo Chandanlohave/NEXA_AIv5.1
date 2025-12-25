@@ -23,25 +23,19 @@ const VoiceQualityToggle: React.FC<{ config: AppConfig, onConfigChange: (c: AppC
     <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Voice Quality</label>
     <div className="flex gap-1">
       <button
-        onClick={() => onConfigChange({ ...config, voiceQuality: 'intelligent' })}
-        className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'intelligent' ? 'bg-nexa-blue text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-blue/50'}`}
-      >
-        Intelligent
-      </button>
-      <button
         onClick={() => onConfigChange({ ...config, voiceQuality: 'hd' })}
         className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'hd' ? 'bg-nexa-cyan text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-cyan/50'}`}
       >
-        Always HD
+        High Quality (Gemini)
       </button>
       <button
         onClick={() => onConfigChange({ ...config, voiceQuality: 'standard' })}
         className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'standard' ? 'bg-nexa-yellow text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-yellow/50'}`}
       >
-        Standard
+        Standard (Offline)
       </button>
     </div>
-    <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Intelligent mode saves quota on short replies.</p>
+    <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Gemini voice provides the best experience.</p>
   </div>
 );
 
