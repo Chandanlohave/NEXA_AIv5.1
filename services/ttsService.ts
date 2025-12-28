@@ -135,7 +135,12 @@ export const speak = async (user: UserProfile, text: string, config: AppConfig, 
             
             // If the error is related to content generation failure (OTHER), retry with a stable fallback voice.
             if (err.message.includes('API_NO_AUDIO') || err.message.includes('OTHER')) {
-                 const fallbackVoice = 'Puck'; // Puck is generally very stable
+                 // Smart Gender Fallback:
+                 // If primary was Angry (Male), fallback to Puck (Male).
+                 // If primary was Standard (Female), fallback to 'Aoede' (Distinctly Female).
+                 // 'Aoede' is safer than 'Zephyr' for maintaining female persona.
+                 const fallbackVoice = isAngry ? 'Puck' : 'Aoede';
+                 
                  console.log(`Retrying TTS with fallback voice: ${fallbackVoice}`);
                  base64Audio = await generateAudioFromGemini(ai, cleanText, fallbackVoice);
             } else {

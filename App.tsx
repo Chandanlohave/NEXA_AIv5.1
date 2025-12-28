@@ -171,9 +171,9 @@ const App: React.FC = () => {
         const now = new Date();
         const hour = now.getHours();
 
-        // 11 PM rest reminder
+        // 11 PM rest reminder - HINGLISH UPDATE
         if (hour === 23 && !remindersShownRef.current.rest) {
-            const msg = "Sir, it's 11 PM. I recommend you take some rest now. Your well-being is my priority.";
+            const msg = "Sir, raat ke 11 baj chuke hain. Ab aapko aaram karna chahiye. Please so jaiye, health important hai.";
             speakTextTTS(user, msg, config, () => {}, () => {}, false);
             remindersShownRef.current.rest = true;
         }
