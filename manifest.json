@@ -1,5 +1,5 @@
 {
-  "name": "NEXA AI",
+  "name": "NEXA HUD",
   "short_name": "NEXA",
   "start_url": "/",
   "display": "standalone",
@@ -12,12 +12,6 @@
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any"
-    },
-    {
-      "src": "data:image/svg+xml,%3csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='256' cy='256' r='256' fill='white'/%3e%3crect x='100' y='100' width='312' height='312' fill='black'/%3e%3cpath d='M171.272 412V100H256.545L404 305.091V100H447.636V412H362.363L214.909 214.909V412H171.272Z' fill='%2329DFFF'/%3e%3c/svg%3e",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
     }
   ]
 }

@@ -1,59 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { AppConfig, UserProfile } from '../types';
-import { saveUserApiKey, getUserApiKey } from '../services/memoryService';
-import { playSystemNotificationSound } from '../services/audioService';
+import React from 'react';
+import { AppConfig } from '../types';
 
 interface UserSettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   config: AppConfig;
   onConfigChange: (newConfig: AppConfig) => void;
-  user: UserProfile;
 }
 
-const VoiceQualityToggle: React.FC<{ config: AppConfig, onConfigChange: (c: AppConfig) => void }> = ({ config, onConfigChange }) => (
-  <div>
-    <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Voice Quality</label>
-    <div className="flex gap-1">
-      <button
-        onClick={() => onConfigChange({ ...config, voiceQuality: 'hd' })}
-        className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'hd' ? 'bg-nexa-cyan text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-cyan/50'}`}
-      >
-        High Quality (Gemini)
-      </button>
-      <button
-        onClick={() => onConfigChange({ ...config, voiceQuality: 'standard' })}
-        className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'standard' ? 'bg-nexa-yellow text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-yellow/50'}`}
-      >
-        Standard (Offline)
-      </button>
-    </div>
-    <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Gemini voice provides the best experience.</p>
-  </div>
-);
-
-const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, config, onConfigChange, user }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [currentApiKey, setCurrentApiKey] = useState('');
-
-  useEffect(() => {
-    if (isOpen && user) {
-      const storedKey = getUserApiKey(user);
-      if (storedKey) {
-        setCurrentApiKey(storedKey);
-      }
-    }
-  }, [isOpen, user]);
-
-  const handleApiKeySave = () => {
-    if (apiKey.trim() && user) {
-      saveUserApiKey(user, apiKey.trim());
-      setCurrentApiKey(apiKey.trim());
-      setApiKey('');
-      playSystemNotificationSound();
-    }
-  };
-
+const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, config, onConfigChange }) => {
   if (!isOpen) return null;
 
   const ThemeButton: React.FC<{label: string, value: AppConfig['theme']}> = ({ label, value }) => {
@@ -85,38 +40,6 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
           </div>
         </div>
         
-        <VoiceQualityToggle config={config} onConfigChange={onConfigChange} />
-
-        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
-          <div className="flex justify-between items-center mb-2">
-            <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono">API Key Management</label>
-            <a 
-                href="https://aistudio.google.com/app/apikey" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-nexa-cyan/70 hover:text-nexa-cyan text-[10px] font-mono tracking-wider uppercase"
-            >
-                Get Key
-            </a>
-          </div>
-          <div className="text-zinc-500 text-[10px] font-mono mb-2">
-            Current: {currentApiKey ? `${currentApiKey.substring(0, 4)}...${currentApiKey.slice(-4)}` : 'Not Set'}
-          </div>
-          <input 
-            type="password"
-            placeholder="Enter new Google Gemini API key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-white px-2 py-1.5 text-xs font-mono focus:border-nexa-cyan focus:ring-0 outline-none"
-          />
-          <button 
-             onClick={handleApiKeySave}
-             className="w-full mt-2 py-2 border border-nexa-cyan/30 text-nexa-cyan hover:text-white hover:border-nexa-cyan text-xs font-mono transition-colors"
-           >
-             UPDATE KEY
-           </button>
-        </div>
-
         <div>
           <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">HUD Animation Speed</label>
           <input 

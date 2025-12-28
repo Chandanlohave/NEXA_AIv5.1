@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { AppConfig } from '../types';
-import { saveAdminApiKey } from '../services/memoryService';
-import { playSystemNotificationSound } from '../services/audioService';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -15,29 +13,7 @@ interface AdminPanelProps {
   isProtocolXSettingVisible: boolean;
   isProtocolXManuallyActive: boolean;
   onProtocolXToggle: (isActive: boolean) => void;
-  onLockProtocolX: () => void;
 }
-
-const VoiceQualityToggle: React.FC<{ config: AppConfig, onConfigChange: (c: AppConfig) => void }> = ({ config, onConfigChange }) => (
-  <div>
-    <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Voice Quality</label>
-    <div className="flex gap-1">
-      <button
-        onClick={() => onConfigChange({ ...config, voiceQuality: 'hd' })}
-        className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'hd' ? 'bg-nexa-cyan text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-cyan/50'}`}
-      >
-        High Quality (Gemini)
-      </button>
-      <button
-        onClick={() => onConfigChange({ ...config, voiceQuality: 'standard' })}
-        className={`flex-1 py-2 text-xs font-mono uppercase transition-colors ${config.voiceQuality === 'standard' ? 'bg-nexa-yellow text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-nexa-yellow/50'}`}
-      >
-        Standard (Offline)
-      </button>
-    </div>
-    <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Gemini voice provides the best experience.</p>
-  </div>
-);
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
   isOpen, 
@@ -50,19 +26,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onAdminNameClick,
   isProtocolXSettingVisible,
   isProtocolXManuallyActive,
-  onProtocolXToggle,
-  onLockProtocolX
+  onProtocolXToggle
 }) => {
-  const [newAdminApiKey, setNewAdminApiKey] = useState('');
-
-  const handleAdminApiKeySave = () => {
-    if (newAdminApiKey.trim()) {
-      saveAdminApiKey(newAdminApiKey.trim());
-      playSystemNotificationSound();
-      setNewAdminApiKey('');
-      // You can add a small confirmation message state here if needed
-    }
-  };
+  const [newApiKey, setNewApiKey] = useState('');
 
   if (!isOpen) return null;
 
@@ -80,6 +46,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     a.download = `NEXA_LOGS_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleSaveApiKey = () => {
+    if (newApiKey.trim().length > 10) {
+        // Save to local storage
+        localStorage.setItem('nexa_admin_api_key', newApiKey.trim());
+        
+        // Notify user but DO NOT RELOAD to prevent crash in preview environments
+        alert('API Key updated successfully. NEXA is now linked to this key.');
+        setNewApiKey('');
+    } else {
+        alert('Please enter a valid API key.');
+    }
   };
 
   const ThemeButton: React.FC<{label: string, value: AppConfig['theme']}> = ({ label, value }) => {
@@ -114,8 +93,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
 
-        <VoiceQualityToggle config={config} onConfigChange={onConfigChange} />
-
         <div>
           <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">HUD Rotation Speed</label>
           <input 
@@ -130,7 +107,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         <div>
-          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Mic Animation Speed</label>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Mic Rotation Speed</label>
           <input 
             type="range" 
             min="0.2" 
@@ -141,27 +118,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             className="w-full accent-nexa-cyan" 
           />
         </div>
-        
-        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
-            <label className="block text-red-500 text-xs font-mono mb-2 uppercase">Admin API Key Override</label>
-             <input 
-                type="password"
-                placeholder="Enter new key to override default"
-                value={newAdminApiKey}
-                onChange={(e) => setNewAdminApiKey(e.target.value)}
-                className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-white px-2 py-1.5 text-xs font-mono focus:border-red-500 focus:ring-0 outline-none"
-            />
-            <button 
-                onClick={handleAdminApiKeySave}
-                className="w-full mt-2 py-2 border border-red-500/30 text-red-500 hover:text-white hover:bg-red-500 text-xs font-mono transition-colors"
-            >
-                UPDATE ADMIN KEY
-            </button>
-            <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">This key will be used until memory is purged.</p>
+
+        <div>
+          <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Animations</label>
+          <button 
+            onClick={() => onConfigChange({...config, animationsEnabled: !config.animationsEnabled})}
+            className={`w-full py-2 text-xs font-mono border ${config.animationsEnabled ? 'border-nexa-cyan text-nexa-cyan' : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-500'}`}
+          >
+            {config.animationsEnabled ? 'ENABLED' : 'DISABLED'}
+          </button>
+          <p className="text-zinc-500 text-[10px] font-mono mt-1 text-center">Toggles HUD rotation &amp; effects.</p>
         </div>
 
         {isProtocolXSettingVisible && (
-          <div className="pt-3 mt-2 border-t border-red-500/30 space-y-3 bg-red-900/10 p-2 animate-fade-in">
+          <div className="pt-3 mt-2 border-t border-red-500/30 space-y-2 bg-red-900/10 p-2 animate-fade-in">
               <label className="flex justify-between items-center text-red-400 text-xs font-mono cursor-pointer">
                   <span>PROTOCOL X</span>
                   <div className="relative">
@@ -174,21 +144,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                   </div>
               </label>
-              
-              <button 
-                onClick={onLockProtocolX}
-                className="w-full py-1 bg-red-950/50 border border-red-500/30 text-red-500/70 hover:text-red-500 hover:border-red-500 text-[10px] font-mono uppercase tracking-widest transition-all"
-              >
-                LOCK & HIDE
-              </button>
-              
-              <p className="text-red-500/60 text-[9px] font-mono text-center">
-                  Manual override active. Click LOCK to hide.
+              <p className="text-red-500/60 text-[10px] font-mono text-center">
+                  Manual override for intimate personality matrix.
               </p>
           </div>
         )}
 
         <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+          <div>
+            <label className="block text-zinc-700 dark:text-zinc-400 text-xs font-mono mb-1">Update Admin API Key</label>
+            <div className="flex gap-2">
+              <input 
+                type="password"
+                placeholder="Paste Gemini API Key"
+                value={newApiKey}
+                onChange={(e) => setNewApiKey(e.target.value)}
+                className="flex-1 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-black dark:text-white px-2 py-1 text-xs focus:border-nexa-cyan outline-none"
+              />
+              <button onClick={handleSaveApiKey} className="px-3 bg-nexa-cyan text-black font-bold text-xs hover:bg-white transition-colors">SAVE</button>
+            </div>
+            <p className="text-zinc-500 dark:text-zinc-600 text-[10px] font-mono mt-1">Key is saved securely to your device.</p>
+          </div>
+
            <button 
              onClick={handleExportLogs}
              className="w-full py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:border-black dark:hover:border-white text-xs font-mono transition-colors"

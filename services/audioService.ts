@@ -3,8 +3,6 @@
 // SINGLETON AUDIO CONTEXT FOR THE WHOLE APP
 // This ensures SFX and TTS share the same "unlocked" state.
 let globalAudioCtx: AudioContext | null = null;
-let angerEffectNode: { source: AudioBufferSourceNode, gain: GainNode } | null = null;
-
 
 export const getAudioContext = (): AudioContext => {
     if (!globalAudioCtx && typeof window !== 'undefined') {
@@ -12,7 +10,7 @@ export const getAudioContext = (): AudioContext => {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         globalAudioCtx = new AudioContextClass({ 
             latencyHint: 'interactive',
-            sampleRate: 24000 // Force 24kHz to match Gemini output if possible, reduces resampling artifacts
+            // We let the browser choose the sample rate (usually 44100 or 48000) to prevent hardware crashes
         });
     }
     return globalAudioCtx!;
@@ -24,28 +22,17 @@ export const getAudioContext = (): AudioContext => {
  */
 export const initGlobalAudio = async () => {
     const ctx = getAudioContext();
-    
-    // 1. Resume Context
     if (ctx.state === 'suspended') {
-        try {
-            await ctx.resume();
-        } catch (e) {
-            console.error("Audio resume failed during init", e);
-        }
+        await ctx.resume();
     }
     
-    // 2. Play a Silent Buffer (The "Mobile Unlock" Trick)
-    // We play a very short buffer of 0.1s to force the audio hardware to wake up.
-    try {
-        const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
-        console.log("NEXA Core: Audio Engine Unlocked");
-    } catch (e) {
-        console.error("Audio unlock buffer failed", e);
-    }
+    // Play a silent buffer. This tricks iOS/Android into thinking audio has started,
+    // keeping the channel open for the AI voice later.
+    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
 };
 
 // Helper to play sounds
@@ -289,49 +276,6 @@ export const playSystemNotificationSound = () => {
         osc2.stop(now + 0.1);
         return [gain, gain2];
     });
-};
-
-export const playAngerEffect = () => {
-    if (angerEffectNode) return; // Already playing
-    play((ctx, now) => {
-        const source = ctx.createBufferSource();
-        const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); // 2 second buffer for loop
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < data.length; i++) {
-            data[i] = Math.random() * 2 - 1; // white noise
-        }
-        source.buffer = buffer;
-        source.loop = true;
-
-        const lowpass = ctx.createBiquadFilter();
-        lowpass.type = 'lowpass';
-        lowpass.frequency.value = 80; // deep rumble
-
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.15, now + 0.5); // fade in
-
-        source.connect(lowpass);
-        lowpass.connect(gain);
-        
-        source.start(now);
-        angerEffectNode = { source, gain };
-
-        return [gain];
-    });
-};
-
-export const stopAngerEffect = () => {
-    if (angerEffectNode) {
-        const { source, gain } = angerEffectNode;
-        const ctx = getAudioContext();
-        const now = ctx.currentTime;
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.5);
-        source.stop(now + 0.5);
-        angerEffectNode = null;
-    }
 };
 
 const noteFrequencies: { [note: string]: number } = {
