@@ -18,12 +18,11 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
   const placeholderClass = isRed ? 'placeholder-red-900/40' : 'placeholder-zinc-400 dark:placeholder-nexa-cyan/20';
   
   const isSecretAdminInput = type === 'password' && isRed;
-  // For the admin password, force a solid black background and make the text/dots and their shadow also solid black.
-  // This makes them invisible. The placeholder color is handled separately by placeholderClass.
   const secretStyle = isSecretAdminInput ? { color: '#000', textShadow: '0 0 0 #000' } : {};
 
+  // Reduced margin y-6 to y-4 for better mobile fit
   return (
-    <div className="relative group z-50 my-6">
+    <div className="relative group z-50 my-4">
       <div className="flex items-center justify-center gap-2">
         <span className={`${colorClass} text-3xl font-extralight opacity-40 group-focus-within:opacity-100 group-focus-within:animate-pulse transition-all duration-500`}>[</span>
         <div className="relative flex-1 max-w-[240px]">
@@ -146,9 +145,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
   };
 
   const handleAdminLogin = () => {
-    // FIX: Trim whitespace to handle mobile keyboard auto-spacing
     const inputPass = formData.password.trim();
-    
     if (inputPass.toLowerCase() === 'nexa' || inputPass === '2127') {
       const adminProfile: UserProfile = { name: 'Chandan', mobile: 'admin_001', role: UserRole.ADMIN, gender: 'male' };
       completeLogin(adminProfile);
@@ -212,12 +209,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
       <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       
-      <div className="absolute top-24 text-center animate-fade-in z-50">
+      <div className="absolute top-12 sm:top-24 text-center animate-fade-in z-50">
           <div className="text-[10px] text-zinc-600 dark:text-nexa-cyan/50 font-mono tracking-[0.4em] uppercase">{isResuming ? 'Biometric Link Ready' : 'Project NEXA'}</div>
           {isResuming ? (
-              <div className="text-5xl font-black text-zinc-800 dark:text-white tracking-[0.4em] uppercase drop-shadow-[0_0_15px_rgba(41,223,255,0.2)] dark:drop-shadow-[0_0_15px_rgba(41,223,255,0.4)] mt-2">{savedUserName}</div>
+              <div className="text-4xl sm:text-5xl font-black text-zinc-800 dark:text-white tracking-[0.4em] uppercase drop-shadow-[0_0_15px_rgba(41,223,255,0.2)] dark:drop-shadow-[0_0_15px_rgba(41,223,255,0.4)] mt-2">{savedUserName}</div>
           ) : (
-              <div className="text-xl font-bold text-zinc-700 dark:text-white tracking-[0.1em] uppercase mt-3">A CREATION BY <span className="text-nexa-cyan">CHANDAN LOHAVE</span></div>
+              <div className="text-lg sm:text-xl font-bold text-zinc-700 dark:text-white tracking-[0.1em] uppercase mt-3">A CREATION BY <span className="text-nexa-cyan">CHANDAN LOHAVE</span></div>
           )}
       </div>
 
@@ -229,12 +226,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
           
           {mode === 'INIT' && (
             <div className="flex flex-col justify-center items-center pt-4 pb-2 animate-fade-in relative" style={{ minHeight: '320px' }}>
-              <div onClick={handlePowerUpClick} className="relative w-40 h-40 flex items-center justify-center cursor-pointer group">
+              <div onClick={handlePowerUpClick} className="relative w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center cursor-pointer group">
                   <div className={`absolute inset-0 rounded-full border border-dashed border-nexa-cyan/30 animate-spin`} style={{animationDuration: '12s'}}></div>
                   <div className={`absolute inset-4 rounded-full border border-nexa-cyan/10 animate-spin-reverse-slow`} style={{animationDuration: '20s'}}></div>
                   
-                  <div className={`w-24 h-24 rounded-full bg-nexa-cyan/5 backdrop-blur-md flex flex-col items-center justify-center border border-nexa-cyan/40 shadow-[0_0_30px_rgba(41,223,255,0.2)] group-hover:shadow-[0_0_50px_rgba(41,223,255,0.4)] group-active:scale-95 transition-all duration-500`}>
-                      <div className="text-4xl font-black text-nexa-cyan tracking-tighter drop-shadow-[0_0_12px_theme(colors.nexa.cyan)]">NX</div>
+                  <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-nexa-cyan/5 backdrop-blur-md flex flex-col items-center justify-center border border-nexa-cyan/40 shadow-[0_0_30px_rgba(41,223,255,0.2)] group-hover:shadow-[0_0_50px_rgba(41,223,255,0.4)] group-active:scale-95 transition-all duration-500`}>
+                      <div className="text-3xl sm:text-4xl font-black text-nexa-cyan tracking-tighter drop-shadow-[0_0_12px_theme(colors.nexa.cyan)]">NX</div>
                       <div className="text-[8px] font-mono text-nexa-cyan/60 tracking-[0.4em] mt-1 uppercase">Active</div>
                   </div>
               </div>
@@ -263,12 +260,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
 
           {mode === 'USER_CREATE' && (
             <div className="animate-slide-up space-y-4">
-              <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-8 tracking-[0.3em] uppercase">User Calibration</div></div>
+              <div className="text-center"><div className="text-nexa-cyan text-[10px] font-mono border border-nexa-cyan/20 inline-block px-4 py-1.5 mb-6 tracking-[0.3em] uppercase">User Calibration</div></div>
               
               <BracketInput name="name" placeholder="IDENT_NAME" value={formData.name} onChange={handleChange} autoFocus />
               <BracketInput name="mobile" placeholder="COMMS_ID_10" type="tel" value={formData.mobile} onChange={handleChange} />
 
-              <div className="flex items-center justify-center gap-8 py-4">
+              <div className="flex items-center justify-center gap-8 py-2">
                  <label className="flex items-center gap-3 cursor-pointer group">
                     <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan w-4 h-4" />
                     <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-500 group-hover:text-nexa-cyan transition-colors tracking-widest">MALE</span>
@@ -279,11 +276,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
                  </label>
               </div>
 
-              <div className="pt-6">
+              <div className="pt-4">
                   <CyberButton onClick={handleUserCreate} label="Proceed to Auth" loading={loading} />
               </div>
 
-              <div className="pt-6 flex justify-between items-center px-1">
+              <div className="pt-4 flex justify-between items-center px-1">
                   <button onClick={() => setMode('INIT')} className="text-[10px] text-zinc-600 dark:text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-2 group"><span className="group-hover:-translate-x-1 transition-transform opacity-50">{'<<'}</span> Cancel</button>
                   <button onClick={switchToAdmin} className="text-[10px] text-zinc-500/60 dark:text-zinc-500/40 hover:text-red-500 font-mono tracking-widest uppercase transition-colors">Admin_OS</button>
               </div>
@@ -312,7 +309,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
 
           {mode === 'ADMIN' && (
             <div className="animate-slide-up relative z-10">
-              <div className="text-center mb-10">
+              <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-3 border border-red-500/40 px-5 py-2 bg-red-500/5 backdrop-blur-sm rounded-sm">
                   <div className="w-2 h-2 bg-red-500 animate-ping rounded-full"></div>
                   <span className="text-red-500 text-[10px] font-mono tracking-[0.4em] uppercase">Root Authority</span>
@@ -321,7 +318,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
               <div className="space-y-6">
                 <BracketInput name="password" placeholder="SECURE_PASS" type="password" value={formData.password} onChange={handleChange} variant="red" autoFocus className="caret-transparent" />
               </div>
-              <div className="pt-10 space-y-6">
+              <div className="pt-8 space-y-6">
                 <button onClick={handleAdminLogin} disabled={loading} className="w-full py-5 bg-red-600/90 text-white font-black tracking-[0.4em] hover:bg-red-500 hover:shadow-[0_0_30px_rgba(220,38,38,0.6)] transition-all clip-corner uppercase text-xs" style={{ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }}>
                    {loading ? 'Validating...' : 'Authorize_Link'}
                 </button>
@@ -334,7 +331,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onResume, isResuming = false, save
         </div>
         <div className="flex justify-between mt-4 px-2 opacity-30"><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono uppercase tracking-[0.2em]`}>Secured_Line</div><div className={`text-[8px] ${mode === 'ADMIN' ? 'text-red-500' : 'text-nexa-cyan'} font-mono tracking-[0.2em]`}>NEXA_V12_LOHAVE</div></div>
       </div>
-      <div className="absolute bottom-20 text-center text-[10px] font-mono font-bold text-zinc-600 dark:text-white/70 tracking-widest animate-fade-in z-50 uppercase">
+      <div className="absolute bottom-10 sm:bottom-20 text-center text-[9px] sm:text-[10px] font-mono font-bold text-zinc-600 dark:text-white/70 tracking-widest animate-fade-in z-50 uppercase">
         © All Copyright Reserved By Chandan Lohave 2025
       </div>
       <InstallPWAButton />

@@ -66,9 +66,10 @@ const StudyHubPanel: React.FC<StudyHubPanelProps> = ({ isOpen, onClose, user, on
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-3xl bg-black border-2 border-nexa-blue/50 p-6 shadow-[0_0_30px_rgba(0,119,255,0.4)] relative max-h-[90vh] flex flex-col">
+      {/* Optimized padding for mobile: p-4 instead of p-6 */}
+      <div className="w-full max-w-3xl bg-black border-2 border-nexa-blue/50 p-4 sm:p-6 shadow-[0_0_30px_rgba(0,119,255,0.4)] relative max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center mb-4 border-b border-nexa-blue/30 pb-2 shrink-0">
-          <h2 className="text-nexa-blue text-xl font-bold tracking-widest font-mono">
+          <h2 className="text-nexa-blue text-lg sm:text-xl font-bold tracking-widest font-mono">
              {user.role === UserRole.ADMIN ? "IGNOU EXAM SCHEDULE" : "STUDY BUDDY: HALL TICKET"}
           </h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-white text-2xl leading-none">&times;</button>

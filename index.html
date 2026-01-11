@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="data:image/svg+xml,%3csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='256' cy='256' r='256' fill='white'/%3e%3crect x='100' y='100' width='312' height='312' fill='black'/%3e%3cpath d='M171.272 412V100H256.545L404 305.091V100H447.636V412H362.363L214.909 214.909V412H171.272Z' fill='%2329DFFF'/%3e%3c/svg%3e" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="NEXA AI Assistant" />
     
@@ -31,6 +31,7 @@
                 blue: '#0077ff',
                 red: '#ff2a2a',
                 yellow: '#ffcc00',
+                green: '#2ecc71',
                 dark: '#050a14',
                 glass: 'rgba(41, 223, 255, 0.05)',
               }
@@ -40,58 +41,11 @@
               mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
             },
             animation: {
-              'spin-slow': 'spin 8s linear infinite',
-              'spin-reverse-slow': 'spin-reverse 10s linear infinite',
-              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'blink': 'blink 1s step-end infinite',
               'fade-in': 'fadeIn 0.5s ease-out forwards',
-              'slide-up': 'slideUp 0.6s ease-out forwards',
-              'scan': 'scanLine 3s linear infinite',
-              'grid-move': 'gridMove 20s linear infinite',
-              'breathing': 'breathing 2.5s ease-in-out infinite',
-              'glitch-shake': 'glitchShake 0.15s ease-in-out infinite',
-              'danger-pulse': 'dangerPulse 2s ease-in-out infinite',
+              'pulse-fast': 'pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             },
             keyframes: {
-              'spin-reverse': {
-                from: { transform: 'rotate(360deg)' },
-                to: { transform: 'rotate(0deg)' },
-              },
-              blink: {
-                '0%, 100%': { opacity: '1' },
-                '50%': { opacity: '0' },
-              },
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              slideUp: {
-                '0%': { transform: 'translateY(20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
-              scanLine: {
-                '0%': { top: '-10%' },
-                '100%': { top: '110%' },
-              },
-              gridMove: {
-                '0%': { backgroundPosition: '0 0' },
-                '100%': { backgroundPosition: '0 100px' }
-              },
-              breathing: {
-                '0%, 100%': { transform: 'scale(1)' },
-                '50%': { transform: 'scale(0.97)' },
-              },
-              glitchShake: {
-                '0%, 100%': { transform: 'translate(0,0)' },
-                '20%': { transform: 'translate(-4px, 4px)' },
-                '40%': { transform: 'translate(-4px, -4px)' },
-                '60%': { transform: 'translate(4px, 4px)' },
-                '80%': { transform: 'translate(4px, -4px)' },
-              },
-              dangerPulse: {
-                '0%, 100%': { boxShadow: 'inset 0 0 50px rgba(255, 0, 0, 0.1)' },
-                '50%': { boxShadow: 'inset 0 0 100px rgba(255, 0, 0, 0.4)' },
-              }
+              fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
             }
           }
         }
@@ -100,144 +54,36 @@
     <style>
       html, body, #root {
         height: 100%;
+        height: 100dvh; /* Dynamic viewport height for mobile browsers */
         margin: 0;
         padding: 0;
-      }
-      body {
         background-color: #000;
         color: #fff;
         overflow: hidden;
-        overscroll-behavior: none;
-        transition: background-color 0.5s ease;
+        font-family: 'Rajdhani', sans-serif;
       }
       
-      /* 3D Perspective Grid Background */
-      .perspective-grid {
-        position: absolute;
-        width: 200%;
-        height: 100%;
-        left: -50%;
-        background-image: 
-          linear-gradient(var(--grid-color, rgba(41, 223, 255, 0.1)) 1px, transparent 1px),
-          linear-gradient(90deg, var(--grid-color, rgba(41, 223, 255, 0.1)) 1px, transparent 1px);
-        background-size: 50px 50px;
-        transform: perspective(500px) rotateX(60deg);
-        animation: gridMove 10s linear infinite;
-        opacity: 0.3;
-        z-index: 0;
-        mask-image: linear-gradient(to bottom, transparent 0%, black 40%, black 80%, transparent 100%);
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 40%, black 80%, transparent 100%);
-        transition: all 0.5s ease;
-      }
-
-      /* Global Danger Mode Modifier */
-      .danger-mode::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        background: radial-gradient(circle, transparent 40%, rgba(255, 0, 0, 0.25) 100%);
-        z-index: 51; /* Above scanlines */
-        pointer-events: none;
-        animation: dangerPulse 1s infinite;
-      }
-      .danger-mode .perspective-grid {
-        --grid-color: rgba(255, 42, 42, 0.3);
-        animation-duration: 2s;
-      }
-      .danger-mode .vignette {
-        --vignette-mid: rgba(255, 0, 0, 0.2);
-        --vignette-edge: rgba(100, 0, 0, 0.9);
-      }
-
-      /* Holographic Vignette */
-      .vignette {
-        position: fixed;
-        inset: 0;
-        background: radial-gradient(circle at center, transparent 0%, var(--vignette-mid, rgba(0,0,0,0.4)) 70%, var(--vignette-edge, rgba(0,0,0,0.9)) 100%);
-        pointer-events: none;
-        z-index: 1;
-        transition: all 0.5s ease;
-      }
-      
-      /* Scanlines */
-      .scanlines {
-        position: fixed;
-        inset: 0;
-        background: repeating-linear-gradient(
-          to bottom,
-          transparent 0px,
-          transparent 2px,
-          var(--scanline-color, rgba(0, 0, 0, 0.3)) 3px
-        );
-        pointer-events: none;
-        z-index: 50;
-        opacity: 0.15;
+      canvas {
+        touch-action: none;
       }
 
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .password-hidden { -webkit-text-security: disc; text-security: disc; }
-      [data-vercel-toolbar] { display: none !important; }
-
-      /* --- NEW VISUAL EFFECTS --- */
-      @keyframes glitch {
-        0% { transform: translate(0); }
-        20% { transform: translate(-3px, 3px); }
-        40% { transform: translate(-3px, -3px); }
-        60% { transform: translate(3px, 3px); }
-        80% { transform: translate(3px, -3px); }
-        100% { transform: translate(0); }
-      }
-      .glitch-effect {
-        animation: glitch 0.2s steps(2, end) infinite;
-      }
-
-      @keyframes alert-blink {
-        0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.02); }
-      }
-      .alert-effect::after {
-        content: 'CRITICAL ALERT';
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: clamp(2rem, 12vw, 5rem);
-        color: #ff2a2a;
-        background: rgba(255,0,0,0.05);
-        padding: 1rem 100%;
-        border: 2px solid #ff2a2a;
-        font-family: monospace;
-        font-weight: bold;
-        text-align: center;
-        text-shadow: 0 0 15px #ff2a2a;
-        z-index: 1000;
-        animation: alert-blink 0.5s infinite;
-        pointer-events: none;
-      }
-
     </style>
-    <script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.15.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.6",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/vite@^5.1.1",
-    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0"
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
-    <script>
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js");
-      }
-    </script>
-  </head>
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

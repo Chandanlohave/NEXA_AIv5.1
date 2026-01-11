@@ -8,6 +8,7 @@ interface ChatPanelProps {
   hudState?: HUDState;
   isAudioLoading?: boolean;
   onTypingComplete: () => void;
+  onOptionClick?: (text: string) => void;
 }
 
 interface TypewriterProps {
@@ -41,7 +42,7 @@ const TypewriterText: React.FC<TypewriterProps> = ({ text, onComplete, onUpdate 
 };
 
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = UserRole.USER, hudState, isAudioLoading, onTypingComplete }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = UserRole.USER, hudState, isAudioLoading, onTypingComplete, onOptionClick }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -86,7 +87,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
           const cleanTextForDisplay = msg.text.trim();
 
           return (
-            <div key={msg.timestamp + idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
+            <div key={msg.timestamp + idx} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-slide-up`}>
               <div className={`relative max-w-[90%] px-3 py-2 font-mono text-sm leading-relaxed ${isUser ? 'text-right border-r border-nexa-blue/30 bg-gradient-to-l from-nexa-blue/20 to-transparent' : 'text-left border-l border-nexa-cyan/30 bg-gradient-to-r from-nexa-cyan/10 to-transparent dark:from-nexa-cyan/5'}`}>
                 <div className={`${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'} dark:text-inherit text-zinc-800 dark:text-zinc-100`}>
                   {isUser ? (
@@ -105,6 +106,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
                    {label} &middot; {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}
                 </div>
               </div>
+              
+              {/* Quick Response Chips - Render only for the last model message if suggestions exist */}
+              {isModelLastMessage && msg.suggestions && msg.suggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2 max-w-[90%] animate-fade-in pl-2">
+                      {msg.suggestions.map((option, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => onOptionClick && onOptionClick(option)}
+                            className="px-3 py-1.5 bg-black/40 border border-nexa-cyan/30 text-nexa-cyan text-[10px] font-mono uppercase tracking-wider hover:bg-nexa-cyan hover:text-black hover:border-nexa-cyan transition-all active:scale-95 rounded-sm backdrop-blur-sm"
+                          >
+                             {option}
+                          </button>
+                      ))}
+                  </div>
+              )}
             </div>
           );
         })}

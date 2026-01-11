@@ -8,6 +8,7 @@ let currentSource: AudioBufferSourceNode | null = null;
 const fixPronunciation = (text: string): string => {
     // MANDATORY PRONUNCIATION RULE:
     // Whenever NEXA SPEAKS the name “Lohave”, it MUST ALWAYS pronounce it exactly as: “लोहवे”
+    // This ensures the audio output matches the Hindi pronunciation requested.
     return text.replace(/Lohave/gi, "लोहवे");
 };
 
@@ -62,23 +63,16 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
   return buffer;
 }
 
-const TTS_SAFETY_SETTINGS = [
-    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-];
-
 // Helper function to perform the actual API call
 const generateAudioFromGemini = async (ai: GoogleGenAI, text: string, voiceName: string) => {
+    // Note: safetySettings are not supported for TTS models and cause RPC errors if included.
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text }] }],
         config: {
             responseModalities: [Modality.AUDIO], 
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
-        },
-        safetySettings: TTS_SAFETY_SETTINGS
+        }
     });
 
     const candidate = response.candidates?.[0];
@@ -94,7 +88,10 @@ const generateAudioFromGemini = async (ai: GoogleGenAI, text: string, voiceName:
 export const speak = async (user: UserProfile, text: string, config: AppConfig, onStart: (audioDuration: number) => void, onEnd: (error?: string) => void, isAngry: boolean = false) => {
     stop();
     
+    // Step 1: Fix pronunciation (Lohave -> लोहवे)
     const audioText = fixPronunciation(text);
+    
+    // Step 2: Clean for TTS
     const cleanText = cleanTextForTTS(audioText);
 
     if (!cleanText || cleanText.length === 0) {
@@ -134,7 +131,7 @@ export const speak = async (user: UserProfile, text: string, config: AppConfig, 
             console.warn(`TTS Primary Voice (${primaryVoice}) failed:`, err.message);
             
             // If the error is related to content generation failure (OTHER), retry with a stable fallback voice.
-            if (err.message.includes('API_NO_AUDIO') || err.message.includes('OTHER')) {
+            if (err.message.includes('API_NO_AUDIO') || err.message.includes('OTHER') || err.message.includes('Rpc failed')) {
                  // Smart Gender Fallback:
                  // If primary was Angry (Male), fallback to Puck (Male).
                  // If primary was Standard (Female), fallback to 'Aoede' (Distinctly Female).
